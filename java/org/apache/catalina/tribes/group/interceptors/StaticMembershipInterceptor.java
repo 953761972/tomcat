@@ -159,10 +159,13 @@ public class StaticMembershipInterceptor extends ChannelInterceptorBase
         final ChannelInterceptorBase base = this;
         ScheduledExecutorService executor = getChannel().getUtilityExecutor();
         for (final Member member : members) {
-            Runnable r = () -> {
-                base.memberAdded(member);
-                if (getfirstInterceptor().getMember(member) != null) {
-                    sendLocalMember(new Member[]{member});
+            Runnable r = new Runnable() {
+                @Override
+                public void run() {
+                    base.memberAdded(member);
+                    if (getfirstInterceptor().getMember(member) != null) {
+                        sendLocalMember(new Member[]{member});
+                    }
                 }
             };
             executor.execute(r);

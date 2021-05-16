@@ -134,6 +134,13 @@ public class Catalina {
 
 
     /**
+     * Rethrow exceptions on init failure.
+     */
+    protected boolean throwOnInitFailure =
+            Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE");
+
+
+    /**
      * Generate Tomcat embedded code from configuration files.
      */
     protected boolean generateCode = false;
@@ -230,6 +237,24 @@ public class Catalina {
 
     public void setGeneratedCodePackage(String generatedCodePackage) {
         this.generatedCodePackage = generatedCodePackage;
+    }
+
+
+    /**
+     * @return <code>true</code> if an exception should be thrown if an error
+     * occurs during server init
+     */
+    public boolean getThrowOnInitFailure() {
+        return throwOnInitFailure;
+    }
+
+
+    /**
+     * Set the behavior regarding errors that could occur during server init.
+     * @param throwOnInitFailure the new flag value
+     */
+    public void setThrowOnInitFailure(boolean throwOnInitFailure) {
+        this.throwOnInitFailure = throwOnInitFailure;
     }
 
 
@@ -700,8 +725,6 @@ public class Catalina {
 
         long t1 = System.nanoTime();
 
-        initDirs();
-
         // Before digester - it may be needed
         initNaming();
 
@@ -723,7 +746,7 @@ public class Catalina {
         try {
             getServer().init();
         } catch (LifecycleException e) {
-            if (Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE")) {
+            if (throwOnInitFailure) {
                 throw new java.lang.Error(e);
             } else {
                 log.error(sm.getString("catalina.initError"), e);
@@ -876,14 +899,6 @@ public class Catalina {
     }
 
 
-    /**
-     * @deprecated unused. Will be removed in Tomcat 10 onwards.
-     */
-    @Deprecated
-    protected void initDirs() {
-    }
-
-
     protected void initStreams() {
         // Replace System.out and System.err with a custom PrintStream
         System.setOut(new SystemLogHandler(System.out));
@@ -894,7 +909,7 @@ public class Catalina {
     protected void initNaming() {
         // Setting additional variables
         if (!useNaming) {
-            log.info(sm.getString("catalina.noNaming"));
+            log.info(sm.getString("catalina.noNatming"));
             System.setProperty("catalina.useNaming", "false");
         } else {
             System.setProperty("catalina.useNaming", "true");

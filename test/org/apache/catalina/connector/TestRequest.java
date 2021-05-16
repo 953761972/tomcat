@@ -36,10 +36,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.junit.Assert;
 import org.junit.Ignore;
@@ -921,7 +921,7 @@ public class TestRequest extends TomcatBaseTest {
     }
 
 
-    private void doTestGetReader(String userAgentCharacterEncoding, boolean expect200)
+    private void doTestGetReader(String userAgentCharaceterEncoding, boolean expect200)
             throws Exception {
 
         // Setup Tomcat instance
@@ -937,7 +937,7 @@ public class TestRequest extends TomcatBaseTest {
 
         Charset charset = StandardCharsets.ISO_8859_1;
         try {
-            charset = Charset.forName(userAgentCharacterEncoding);
+            charset = Charset.forName(userAgentCharaceterEncoding);
         } catch (UnsupportedCharsetException e) {
             // Ignore - use default set above
         }
@@ -945,7 +945,7 @@ public class TestRequest extends TomcatBaseTest {
         ByteChunk bc = new ByteChunk();
         Map<String,List<String>> reqHeaders = new HashMap<>();
         reqHeaders.put("Content-Type",
-                Arrays.asList(new String[] {"text/plain;charset=" + userAgentCharacterEncoding}));
+                Arrays.asList(new String[] {"text/plain;charset=" + userAgentCharaceterEncoding}));
 
         int rc = postUrl(body, "http://localhost:" + getPort() + "/", bc, reqHeaders, null);
 

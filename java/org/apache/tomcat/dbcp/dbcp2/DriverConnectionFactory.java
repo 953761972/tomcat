@@ -37,9 +37,12 @@ public class DriverConnectionFactory implements ConnectionFactory {
     /**
      * Constructs a connection factory for a given Driver.
      *
-     * @param driver The Driver.
-     * @param connectString The connection string.
-     * @param properties The connection properties.
+     * @param driver
+     *            The Driver.
+     * @param connectString
+     *            The connection string.
+     * @param properties
+     *            The connection properties.
      */
     public DriverConnectionFactory(final Driver driver, final String connectString, final Properties properties) {
         this.driver = driver;
@@ -78,7 +81,7 @@ public class DriverConnectionFactory implements ConnectionFactory {
 
     @Override
     public String toString() {
-        return this.getClass().getName() + " [" + driver + ";" + connectionString + ";"
-            + Utils.cloneWithoutCredentials(properties) + "]";
+        return this.getClass().getName() + " [" + String.valueOf(driver) + ";" + String.valueOf(connectionString) + ";"
+                + String.valueOf(properties) + "]";
     }
 }

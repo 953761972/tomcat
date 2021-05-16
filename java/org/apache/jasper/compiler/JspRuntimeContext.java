@@ -33,8 +33,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
 
 import org.apache.jasper.Constants;
 import org.apache.jasper.JspCompilationContext;
@@ -440,6 +440,10 @@ public final class JspRuntimeContext {
     }
 
 
+    public Options getOptions() {
+        return options;
+    }
+
     // -------------------------------------------------------- Private Methods
 
     /**
@@ -473,7 +477,7 @@ public final class JspRuntimeContext {
 
         cpath.append(options.getScratchDir() + File.pathSeparator);
 
-        String cp = (String) context.getAttribute(Constants.SERVLET_CLASSPATH);
+        String cp = (String) context.getAttribute(options.getServletClasspathAttribute());
         if (cp == null || cp.equals("")) {
             cp = options.getClassPath();
         }

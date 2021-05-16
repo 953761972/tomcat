@@ -38,6 +38,7 @@ import org.apache.catalina.core.StandardHost;
 import org.apache.catalina.core.StandardService;
 import org.apache.catalina.loader.WebappLoader;
 import org.apache.catalina.realm.DataSourceRealm;
+import org.apache.catalina.realm.JDBCRealm;
 import org.apache.catalina.realm.JNDIRealm;
 import org.apache.catalina.realm.MemoryRealm;
 import org.apache.catalina.realm.UserDatabaseRealm;
@@ -333,17 +334,13 @@ public class MBeanFactory {
      * @return the object name of the created realm
      *
      * @exception Exception if an MBean cannot be created or registered
-     *
-     * @deprecated This method will be removed in Tomcat 10. Use a
-     *             DataSourceRealm instead.
      */
-    @Deprecated
     public String createJDBCRealm(String parent, String driverName,
         String connectionName, String connectionPassword, String connectionURL)
         throws Exception {
 
         // Create a new JDBCRealm instance
-        org.apache.catalina.realm.JDBCRealm realm = new org.apache.catalina.realm.JDBCRealm();
+        JDBCRealm realm = new JDBCRealm();
         realm.setDriverName(driverName);
         realm.setConnectionName(connectionName);
         realm.setConnectionPassword(connectionPassword);
@@ -446,28 +443,22 @@ public class MBeanFactory {
                                              pname.getKeyProperty("host"));
         if(mserver.isRegistered(deployer)) {
             String contextName = context.getName();
-            Boolean result = (Boolean) mserver.invoke(deployer, "tryAddServiced",
-                    new Object [] {contextName},
-                    new String [] {"java.lang.String"});
-            if (result.booleanValue()) {
-                try {
-                    String configPath = (String)mserver.getAttribute(deployer, "configBaseName");
-                    String baseName = context.getBaseName();
-                    File configFile = new File(new File(configPath), baseName+".xml");
-                    if (configFile.isFile()) {
-                        context.setConfigFile(configFile.toURI().toURL());
-                    }
-                    mserver.invoke(deployer, "manageApp",
-                            new Object[] {context},
-                            new String[] {"org.apache.catalina.Context"});
-                } finally {
-                    mserver.invoke(deployer, "removeServiced",
-                            new Object [] {contextName},
-                            new String [] {"java.lang.String"});
-                }
-            } else {
-                throw new IllegalStateException(sm.getString("mBeanFactory.contextCreate.addServicedFail", contextName));
+            mserver.invoke(deployer, "addServiced",
+                           new Object [] {contextName},
+                           new String [] {"java.lang.String"});
+            String configPath = (String)mserver.getAttribute(deployer,
+                                                             "configBaseName");
+            String baseName = context.getBaseName();
+            File configFile = new File(new File(configPath), baseName+".xml");
+            if (configFile.isFile()) {
+                context.setConfigFile(configFile.toURI().toURL());
             }
+            mserver.invoke(deployer, "manageApp",
+                           new Object[] {context},
+                           new String[] {"org.apache.catalina.Context"});
+            mserver.invoke(deployer, "removeServiced",
+                           new Object [] {contextName},
+                           new String [] {"java.lang.String"});
         } else {
             log.warn(sm.getString("mBeanFactory.noDeployer", pname.getKeyProperty("host")));
             Service service = getService(pname);
@@ -478,6 +469,7 @@ public class MBeanFactory {
 
         // Return the corresponding MBean name
         return context.getObjectName().toString();
+
     }
 
 
@@ -750,22 +742,15 @@ public class MBeanFactory {
                                              hostName);
         String pathStr = getPathStr(path);
         if(mserver.isRegistered(deployer)) {
-            Boolean result = (Boolean) mserver.invoke(deployer,"tryAddServiced",
-                       new Object[]{pathStr},
-                       new String[] {"java.lang.String"});
-            if (result.booleanValue()) {
-                try {
-                    mserver.invoke(deployer,"unmanageApp",
-                            new Object[] {pathStr},
-                            new String[] {"java.lang.String"});
-                } finally {
-                    mserver.invoke(deployer,"removeServiced",
-                            new Object[] {pathStr},
-                            new String[] {"java.lang.String"});
-                }
-            } else {
-                throw new IllegalStateException(sm.getString("mBeanFactory.removeContext.addServicedFail", pathStr));
-            }
+            mserver.invoke(deployer,"addServiced",
+                           new Object[]{pathStr},
+                           new String[] {"java.lang.String"});
+            mserver.invoke(deployer,"unmanageApp",
+                           new Object[] {pathStr},
+                           new String[] {"java.lang.String"});
+            mserver.invoke(deployer,"removeServiced",
+                           new Object[] {pathStr},
+                           new String[] {"java.lang.String"});
         } else {
             log.warn(sm.getString("mBeanFactory.noDeployer", hostName));
             Host host = (Host) engine.findChild(hostName);
@@ -780,6 +765,7 @@ public class MBeanFactory {
            }
 
         }
+
     }
 
 

@@ -17,35 +17,26 @@
 
 Bundle-Name: tomcat-el-api
 Bundle-SymbolicName: org.apache.tomcat-el-api
-Export-Package: javax.el;version=3.0
+Export-Package: jakarta.el;version=${el.spec.version}
 
 Provide-Capability: \
     osgi.contract;\
         osgi.contract=JavaEL;\
-        version:List<Version>="3.0,2.2,2.1";\
-        uses:='${packages;NAMED;javax.el.*}'
+        version:Version=${el.spec.version};\
+        uses:='${packages;NAMED;jakarta.el.*}'
 
-Require-Capability: \
-    osgi.extender;\
-        filter:="(&(osgi.extender=osgi.serviceloader.processor)(version>=1.0.0)(!(version>=2.0.0)))",\
-    osgi.serviceloader;\
-        filter:="(osgi.serviceloader=javax.el.ExpressionFactory)";\
-        osgi.serviceloader="javax.el.ExpressionFactory",\
-    osgi.ee;\
-        filter:="(&(osgi.ee=JavaSE)(version=1.8))"
-
--namesection: javax/el*/;\
-    Specification-Title='Expression Language';\
-    Specification-Version=3.0;\
-    Specification-Vendor='Sun Microsystems, Inc.';\
-    Implementation-Title=javax.el;\
-    Implementation-Version=3.0.${el.revision};\
-    Implementation-Vendor='Apache Software Foundation'
+-namesection: jakarta/el*/;\
+    Specification-Title=Jakarta Expression Language;\
+    Specification-Version=${el.spec.version};\
+    Specification-Vendor=Eclipse Foundation;\
+    Implementation-Title=jakarta.el;\
+    Implementation-Version=${el.spec.version}.${el.revision};\
+    Implementation-Vendor=Apache Software Foundation
 
 -jpms-module-info: \
-    java.el;\
+    jakarta.el.api;\
         access=32;\
         version=${el.spec.version}
 -jpms-module-info-options: \
-    java.el;\
+    jakarta.el.api;\
         substitute=el-api

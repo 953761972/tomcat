@@ -26,7 +26,6 @@ import java.net.JarURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.channels.FileChannel;
-import java.nio.file.Path;
 import java.util.Enumeration;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -117,7 +116,10 @@ public class ExpandWar {
         }
 
         // Expand the WAR into the new document base directory
-        Path canonicalDocBasePath = docBase.getCanonicalFile().toPath();
+        String canonicalDocBasePrefix = docBase.getCanonicalPath();
+        if (!canonicalDocBasePrefix.endsWith(File.separator)) {
+            canonicalDocBasePrefix += File.separator;
+        }
 
         // Creating war tracker parent (normally META-INF)
         File warTrackerParent = warTracker.getParentFile();
@@ -132,13 +134,14 @@ public class ExpandWar {
                 JarEntry jarEntry = jarEntries.nextElement();
                 String name = jarEntry.getName();
                 File expandedFile = new File(docBase, name);
-                if (!expandedFile.getCanonicalFile().toPath().startsWith(canonicalDocBasePath)) {
+                if (!expandedFile.getCanonicalPath().startsWith(
+                        canonicalDocBasePrefix)) {
                     // Trying to expand outside the docBase
                     // Throw an exception to stop the deployment
                     throw new IllegalArgumentException(
                             sm.getString("expandWar.illegalPath",war, name,
                                     expandedFile.getCanonicalPath(),
-                                    canonicalDocBasePath));
+                                    canonicalDocBasePrefix));
                 }
                 int last = name.lastIndexOf('/');
                 if (last >= 0) {
@@ -214,7 +217,10 @@ public class ExpandWar {
         File docBase = new File(host.getAppBaseFile(), pathname);
 
         // Calculate the document base directory
-        Path canonicalDocBasePath = docBase.getCanonicalFile().toPath();
+        String canonicalDocBasePrefix = docBase.getCanonicalPath();
+        if (!canonicalDocBasePrefix.endsWith(File.separator)) {
+            canonicalDocBasePrefix += File.separator;
+        }
         JarURLConnection juc = (JarURLConnection) war.openConnection();
         juc.setUseCaches(false);
         try (JarFile jarFile = juc.getJarFile()) {
@@ -223,13 +229,14 @@ public class ExpandWar {
                 JarEntry jarEntry = jarEntries.nextElement();
                 String name = jarEntry.getName();
                 File expandedFile = new File(docBase, name);
-                if (!expandedFile.getCanonicalFile().toPath().startsWith(canonicalDocBasePath)) {
+                if (!expandedFile.getCanonicalPath().startsWith(
+                        canonicalDocBasePrefix)) {
                     // Entry located outside the docBase
                     // Throw an exception to stop the deployment
                     throw new IllegalArgumentException(
                             sm.getString("expandWar.illegalPath",war, name,
                                     expandedFile.getCanonicalPath(),
-                                    canonicalDocBasePath));
+                                    canonicalDocBasePrefix));
                 }
             }
         } catch (IOException e) {

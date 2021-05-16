@@ -32,10 +32,11 @@ import java.util.Map;
 import java.util.Random;
 
 import javax.net.SocketFactory;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.junit.Assert;
 import org.junit.Assume;
@@ -46,6 +47,7 @@ import org.apache.catalina.connector.Connector;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.catalina.startup.TomcatBaseTest;
 import org.apache.catalina.util.IOTools;
+import org.apache.coyote.http11.Http11NioProtocol;
 import org.apache.coyote.http2.HpackDecoder.HeaderEmitter;
 import org.apache.coyote.http2.Http2Parser.Input;
 import org.apache.coyote.http2.Http2Parser.Output;
@@ -466,35 +468,19 @@ public abstract class Http2TestBase extends TomcatBaseTest {
 
 
     protected void readSimplePostResponse(boolean padding) throws Http2Exception, IOException {
-        /*
-         * If there is padding there will always be a window update for the
-         * connection and, depending on timing, there may be an update for the
-         * stream. The Window updates for padding (if present) may appear at any
-         * time. The comments in the code below are only indicative of what the
-         * frames are likely to contain. Actual frame order with padding may be
-         * different.
-         */
-
+        if (padding) {
+            // Window updates for padding
+            parser.readFrame(true);
+            parser.readFrame(true);
+        }
         // Connection window update after reading request body
         parser.readFrame(true);
         // Stream window update after reading request body
         parser.readFrame(true);
         // Headers
         parser.readFrame(true);
-        // Body (includes end of stream)
+        // Body
         parser.readFrame(true);
-
-        if (padding) {
-            // Connection window update for padding
-            parser.readFrame(true);
-
-            // If EndOfStream has not been received then the stream window
-            // update must have been received so a further frame needs to be
-            // read for EndOfStream.
-            if (!output.getTrace().contains("EndOfStream")) {
-                parser.readFrame(true);
-            }
-        }
     }
 
 
@@ -578,12 +564,13 @@ public abstract class Http2TestBase extends TomcatBaseTest {
         Connector connector = tomcat.getConnector();
         http2Protocol = new UpgradableHttp2Protocol();
         // Short timeouts for now. May need to increase these for CI systems.
-        http2Protocol.setReadTimeout(10000);
-        http2Protocol.setWriteTimeout(10000);
-        http2Protocol.setKeepAliveTimeout(25000);
-        http2Protocol.setStreamReadTimeout(5000);
-        http2Protocol.setStreamWriteTimeout(5000);
+        http2Protocol.setReadTimeout(6000);
+        http2Protocol.setWriteTimeout(6000);
+        http2Protocol.setKeepAliveTimeout(15000);
+        http2Protocol.setStreamReadTimeout(3000);
+        http2Protocol.setStreamWriteTimeout(3000);
         http2Protocol.setMaxConcurrentStreams(maxConcurrentStreams);
+        http2Protocol.setHttp11Protocol(new Http11NioProtocol());
         connector.addUpgradeProtocol(http2Protocol);
         if (tls) {
             // Enable TLS
@@ -591,7 +578,7 @@ public abstract class Http2TestBase extends TomcatBaseTest {
         }
     }
 
-    private static class UpgradableHttp2Protocol extends Http2Protocol {
+    private class UpgradableHttp2Protocol extends Http2Protocol {
         @Override
         public String getHttpUpgradeName(boolean isSSLEnabled) {
             return "h2c";
@@ -810,9 +797,14 @@ public abstract class Http2TestBase extends TomcatBaseTest {
     }
 
 
-    byte[] buildGoaway(int streamId, int lastStreamId, long errorCode) {
+    void sendGoaway(int streamId, int lastStreamId, long errorCode, byte[] debug)
+            throws IOException {
         byte[] goawayFrame = new byte[17];
-        ByteUtil.setThreeBytes(goawayFrame, 0, 8);
+        int len = 8;
+        if (debug != null) {
+            len += debug.length;
+        }
+        ByteUtil.setThreeBytes(goawayFrame, 0, len);
         // Type
         goawayFrame[3] = FrameType.GOAWAY.getIdByte();
         // No flags
@@ -821,13 +813,10 @@ public abstract class Http2TestBase extends TomcatBaseTest {
         // Last stream
         ByteUtil.set31Bits(goawayFrame, 9, lastStreamId);
         ByteUtil.setFourBytes(goawayFrame, 13, errorCode);
-        return goawayFrame;
-    }
-
-
-    void sendGoaway(int streamId, int lastStreamId, long errorCode) throws IOException {
-        byte[] goawayFrame = buildGoaway(streamId, lastStreamId, errorCode);
         os.write(goawayFrame);
+        if (debug != null && debug.length > 0) {
+            os.write(debug);
+        }
         os.flush();
     }
 
@@ -1028,7 +1017,7 @@ public abstract class Http2TestBase extends TomcatBaseTest {
 
 
         @Override
-        public void endRequestBodyFrame(int streamId, int dataLength) throws Http2Exception {
+        public void endRequestBodyFrame(int streamId) throws Http2Exception {
             if (bodyBuffer != null) {
                 if (bodyBuffer.limit() > 0) {
                     trace.append(lastStreamId + "-Body-");
@@ -1169,10 +1158,10 @@ public abstract class Http2TestBase extends TomcatBaseTest {
 
 
         @Override
-        public void onSwallowedUnknownFrame(int streamId, int frameTypeId, int flags, int size) {
+        public void swallowed(int streamId, FrameType frameType, int flags, int size) {
             trace.append(streamId);
             trace.append(",");
-            trace.append(frameTypeId);
+            trace.append(frameType);
             trace.append(",");
             trace.append(flags);
             trace.append(",");
@@ -1182,10 +1171,11 @@ public abstract class Http2TestBase extends TomcatBaseTest {
 
 
         @Override
-        public void onSwallowedDataFramePayload(int streamId, int swallowedDataBytesCount) {
-            // NO-OP
-            // Many tests swallow request bodies which triggers this
-            // notification. It is added to the trace to reduce noise.
+        public void swallowedPadding(int streamId, int paddingLength) {
+            trace.append(streamId);
+            trace.append("-SwallowedPadding-[");
+            trace.append(paddingLength);
+            trace.append("]\n");
         }
 
 

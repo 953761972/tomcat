@@ -24,16 +24,13 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLSession;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -71,11 +68,7 @@ public class SecureNioChannel extends NioChannel {
     protected boolean closed = false;
     protected boolean closing = false;
 
-    private final Map<String,List<String>> additionalTlsAttributes = new HashMap<>();
-
-    protected NioSelectorPool pool;
-
-    public SecureNioChannel(SocketBufferHandler bufHandler, NioSelectorPool pool, NioEndpoint endpoint) {
+    public SecureNioChannel(SocketBufferHandler bufHandler, NioEndpoint endpoint) {
         super(bufHandler);
 
         // Create the network buffers (these hold the encrypted data).
@@ -87,8 +80,6 @@ public class SecureNioChannel extends NioChannel {
             netOutBuffer = ByteBuffer.allocate(DEFAULT_NET_BUFFER_SIZE);
         }
 
-        // selector pool for blocking operations
-        this.pool = pool;
         this.endpoint = endpoint;
     }
 
@@ -115,28 +106,6 @@ public class SecureNioChannel extends NioChannel {
 //===========================================================================================
 //                  NIO SSL METHODS
 //===========================================================================================
-
-    /**
-     * Flush the channel.
-     *
-     * @param block     Should a blocking write be used?
-     * @param s         The selector to use for blocking, if null then a busy
-     *                  write will be initiated
-     * @param timeout   The timeout for this write operation in milliseconds,
-     *                  -1 means no timeout
-     * @return <code>true</code> if the network buffer has been flushed out and
-     *         is empty else <code>false</code>
-     * @throws IOException If an I/O error occurs during the operation
-     */
-    @Override
-    public boolean flush(boolean block, Selector s, long timeout) throws IOException {
-        if (!block) {
-            flush(netOutBuffer);
-        } else {
-            pool.write(netOutBuffer, this, s, timeout);
-        }
-        return !netOutBuffer.hasRemaining();
-    }
 
     /**
      * Flushes the buffer to the network, non blocking
@@ -334,13 +303,6 @@ public class SecureNioChannel extends NioChannel {
         sslEngine = endpoint.createSSLEngine(hostName, clientRequestedCiphers,
                 clientRequestedApplicationProtocols);
 
-        // Populate additional TLS attributes obtained from the handshake that
-        // aren't available from the session
-        additionalTlsAttributes.put(SSLSupport.REQUESTED_PROTOCOL_VERSIONS_KEY,
-                extractor.getClientRequestedProtocols());
-        additionalTlsAttributes.put(SSLSupport.REQUESTED_CIPHERS_KEY,
-                extractor.getClientRequestedCipherNames());
-
         // Ensure the application buffers (which have to be created earlier) are
         // big enough.
         getBufHandler().expand(sslEngine.getSession().getApplicationBufferSize());
@@ -525,14 +487,6 @@ public class SecureNioChannel extends NioChannel {
         return result;
     }
 
-    public SSLSupport getSSLSupport() {
-        if (sslEngine != null) {
-            SSLSession session = sslEngine.getSession();
-            return endpoint.getSslImplementation().getSSLSupport(session, additionalTlsAttributes);
-        }
-        return null;
-    }
-
     /**
      * Sends an SSL close message, will not physically close the connection here.
      * <br>To close the connection, you could do something like
@@ -551,11 +505,6 @@ public class SecureNioChannel extends NioChannel {
             return;
         }
         closing = true;
-        if (sslEngine == null) {
-            netOutBuffer.clear();
-            closed = true;
-            return;
-        }
         sslEngine.closeOutbound();
 
         if (!flush(netOutBuffer)) {

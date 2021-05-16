@@ -95,28 +95,6 @@ public interface Loader {
 
 
     /**
-     * @return the reloadable flag for this Loader.
-     *
-     * @deprecated Use {@link Context#getReloadable()}. This method will be
-     *             removed in Tomcat 10.
-     */
-    @Deprecated
-    public boolean getReloadable();
-
-
-    /**
-     * Set the reloadable flag for this Loader.
-     *
-     * @param reloadable The new reloadable flag
-     *
-     * @deprecated Use {@link Context#setReloadable(boolean)}. This method will
-     *             be removed in Tomcat 10.
-     */
-    @Deprecated
-    public void setReloadable(boolean reloadable);
-
-
-    /**
      * Add a property change listener to this component.
      *
      * @param listener The listener to add

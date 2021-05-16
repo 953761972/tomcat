@@ -18,7 +18,6 @@
 package org.apache.tomcat.dbcp.dbcp2.datasources;
 
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * @since 2.0
@@ -46,22 +45,37 @@ class PoolKey implements Serializable {
             return false;
         }
         final PoolKey other = (PoolKey) obj;
-        if (!Objects.equals(dataSourceName, other.dataSourceName)) {
+        if (dataSourceName == null) {
+            if (other.dataSourceName != null) {
+                return false;
+            }
+        } else if (!dataSourceName.equals(other.dataSourceName)) {
             return false;
         }
-        return Objects.equals(userName, other.userName);
+        if (userName == null) {
+            if (other.userName != null) {
+                return false;
+            }
+        } else if (!userName.equals(other.userName)) {
+            return false;
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(dataSourceName, userName);
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((dataSourceName == null) ? 0 : dataSourceName.hashCode());
+        result = prime * result + ((userName == null) ? 0 : userName.hashCode());
+        return result;
     }
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder(50);
+        final StringBuffer sb = new StringBuffer(50);
         sb.append("PoolKey(");
-        sb.append("UserName").append(", ").append(dataSourceName);
+        sb.append(userName).append(", ").append(dataSourceName);
         sb.append(')');
         return sb.toString();
     }

@@ -58,7 +58,7 @@ public class AbsoluteOrder {
 
     public static void absoluteOrder(List<Member> members) {
         if ( members == null || members.size() <= 1 ) return;
-        members.sort(comp);
+        java.util.Collections.sort(members, comp);
     }
 
     public static class AbsoluteComparator implements Comparator<Member>,

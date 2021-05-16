@@ -139,12 +139,13 @@ public class DelegatingStatement extends AbandonedTrace implements Statement {
             // See bug 17301 for what could happen when ResultSets are closed twice.
             final List<AbandonedTrace> resultSetList = getTrace();
             if (resultSetList != null) {
-                final ResultSet[] resultSets = resultSetList.toArray(Utils.EMPTY_RESULT_SET_ARRAY);
+                final int size = resultSetList.size();
+                final ResultSet[] resultSets = resultSetList.toArray(new ResultSet[size]);
                 for (final ResultSet resultSet : resultSets) {
                     if (resultSet != null) {
                         try {
                             resultSet.close();
-                        } catch (final Exception e) {
+                        } catch (Exception e) {
                             if (connection != null) {
                                 // Does not rethrow e.
                                 connection.handleExceptionNoThrow(e);
@@ -158,7 +159,7 @@ public class DelegatingStatement extends AbandonedTrace implements Statement {
             if (statement != null) {
                 try {
                     statement.close();
-                } catch (final Exception e) {
+                } catch (Exception e) {
                     if (connection != null) {
                         // Does not rethrow e.
                         connection.handleExceptionNoThrow(e);
@@ -210,7 +211,7 @@ public class DelegatingStatement extends AbandonedTrace implements Statement {
     }
 
     @Override
-    public boolean execute(final String sql, final int[] columnIndexes) throws SQLException {
+    public boolean execute(final String sql, final int columnIndexes[]) throws SQLException {
         checkOpen();
         setLastUsedInParent();
         try {
@@ -222,7 +223,7 @@ public class DelegatingStatement extends AbandonedTrace implements Statement {
     }
 
     @Override
-    public boolean execute(final String sql, final String[] columnNames) throws SQLException {
+    public boolean execute(final String sql, final String columnNames[]) throws SQLException {
         checkOpen();
         setLastUsedInParent();
         try {
@@ -357,7 +358,7 @@ public class DelegatingStatement extends AbandonedTrace implements Statement {
     }
 
     @Override
-    public int executeUpdate(final String sql, final int[] columnIndexes) throws SQLException {
+    public int executeUpdate(final String sql, final int columnIndexes[]) throws SQLException {
         checkOpen();
         setLastUsedInParent();
         try {
@@ -369,7 +370,7 @@ public class DelegatingStatement extends AbandonedTrace implements Statement {
     }
 
     @Override
-    public int executeUpdate(final String sql, final String[] columnNames) throws SQLException {
+    public int executeUpdate(final String sql, final String columnNames[]) throws SQLException {
         checkOpen();
         setLastUsedInParent();
         try {
@@ -465,7 +466,7 @@ public class DelegatingStatement extends AbandonedTrace implements Statement {
      */
     public Statement getInnermostDelegate() {
         Statement s = statement;
-        while (s instanceof DelegatingStatement) {
+        while (s != null && s instanceof DelegatingStatement) {
             s = ((DelegatingStatement) s).getDelegate();
             if (this == s) {
                 return null;

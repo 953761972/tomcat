@@ -22,16 +22,17 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import javax.servlet.SessionTrackingMode;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
-import javax.servlet.http.PushBuilder;
+import jakarta.servlet.SessionTrackingMode;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.PushBuilder;
 
 import org.apache.catalina.Context;
 import org.apache.catalina.authenticator.AuthenticatorBase;
@@ -146,7 +147,13 @@ public class ApplicationPushBuilder implements PushBuilder {
             if (responseCookie.getMaxAge() < 0) {
                 // Path information not available so can only remove based on
                 // name.
-                cookies.removeIf(cookie -> cookie.getName().equals(responseCookie.getName()));
+                Iterator<Cookie> cookieIterator = cookies.iterator();
+                while (cookieIterator.hasNext()) {
+                    Cookie cookie = cookieIterator.next();
+                    if (cookie.getName().equals(responseCookie.getName())) {
+                        cookieIterator.remove();
+                    }
+                }
             } else {
                 cookies.add(new Cookie(responseCookie.getName(), responseCookie.getValue()));
             }

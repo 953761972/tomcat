@@ -193,8 +193,8 @@ public class FileMessageFactory {
      * If EOF is reached, the factory returns null, and closes itself, otherwise
      * the same message is returned as was passed in. This makes sure that not
      * more memory is ever used. To remember, neither the file message or the
-     * factory are thread safe. Don't hand off the message to one thread and
-     * read the same with another.
+     * factory are thread safe. dont hand off the message to one thread and read
+     * the same with another.
      *
      * @param f
      *            FileMessage - the message to be populated with file data
@@ -341,38 +341,6 @@ public class FileMessageFactory {
             throw new IllegalArgumentException(sm.getString("fileMessageFactory.closed"));
         }
     }
-
-    /**
-     * Example usage.
-     *
-     * @param args
-     *            String[], args[0] - read from filename, args[1] write to
-     *            filename
-     * @throws Exception An error occurred
-     * @deprecated
-     */
-    @Deprecated
-    public static void main(String[] args) throws Exception {
-        System.out.println("Usage: FileMessageFactory fileToBeRead fileToBeWritten");
-        System.out.println("Usage: This will make a copy of the file on the local file system");
-        FileMessageFactory read = getInstance(new File(args[0]), false);
-        FileMessageFactory write = getInstance(new File(args[1]), true);
-        FileMessage msg = new FileMessage(null, args[0], args[0]);
-        msg = read.readMessage(msg);
-        if (msg == null) {
-            System.out.println("Empty input file : " + args[0]);
-            return;
-        }
-        System.out.println("Expecting to write " + msg.getTotalNrOfMsgs()
-                + " messages.");
-        int cnt = 0;
-        while (msg != null) {
-            write.writeMessage(msg);
-            cnt++;
-            msg = read.readMessage(msg);
-        }//while
-        System.out.println("Actually wrote " + cnt + " messages.");
-    }///main
 
     public File getFile() {
         return file;

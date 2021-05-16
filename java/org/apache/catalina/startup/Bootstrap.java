@@ -246,7 +246,7 @@ public final class Bootstrap {
      * Initialize daemon.
      * @throws Exception Fatal initialization error
      */
-    public void init() throws Exception {
+    public void  init() throws Exception {
 
         initClassLoaders();
 

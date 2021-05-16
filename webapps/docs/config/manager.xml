@@ -90,6 +90,26 @@
         the default value of <code>false</code> will be used.</p>
       </attribute>
 
+      <attribute name="sessionActivityCheck" required="false">
+        <p>If this is <code>true</code>, Tomcat will track the number of active
+        requests for each session. When determining if a session is valid, any
+        session with at least one active request will always be considered valid.</p>
+        <p>If <code>org.apache.catalina.STRICT_SERVLET_COMPLIANCE</code> is set to
+        <code>true</code>, the default of this setting will be <code>true</code>,
+        else the default value will be <code>false</code>.</p>
+      </attribute>
+
+      <attribute name="sessionLastAccessAtStart" required="false">
+        <p>If this is <code>true</code>, the last accessed time for sessions will
+        be calculated from the beginning of the previous request. If
+        <code>false</code>, the last accessed time for sessions will be calculated
+        from the end of the previous request. This also affects how the idle time
+        is calculated.</p>
+        <p>If <code>org.apache.catalina.STRICT_SERVLET_COMPLIANCE</code> is set to
+        <code>true</code>, the default of this setting will be <code>true</code>,
+        else the default value will be <code>false</code>.</p>
+      </attribute>
+
     </attributes>
 
   </subsection>
@@ -116,10 +136,10 @@
         <p>Absolute or relative (to the work directory for this Context)
         pathname of the file in which session state will be preserved
         across application restarts, if possible.  The default is
-        "SESSIONS.ser".<br />See
+        null.<br />See
         <a href="#Persistence_Across_Restarts">Persistence Across Restarts</a>
         for more information. This persistence may be
-        disabled by setting this attribute to an empty string.</p>
+        enabled by setting this attribute to a non empty string.</p>
       </attribute>
 
       <attribute name="persistAuthentication" required="false">
@@ -418,11 +438,11 @@
   </attributes>
 
 
-  <h5>Data source Based Store</h5>
+  <h5>JDBC Based Store</h5>
 
-  <p>The <em>Data source Based Store</em> implementation saves swapped out
+  <p>The <em>JDBC Based Store</em> implementation saves swapped out
   sessions in individual rows of a preconfigured table in a database
-  that is accessed via a data sourcer.  With large numbers of swapped out
+  that is accessed via a JDBC driver.  With large numbers of swapped out
   sessions, this implementation will exhibit improved performance over
   the File Based Store described above.</p>
 
@@ -436,16 +456,39 @@
       <p>Java class name of the implementation to use.  This class must
       implement the <code>org.apache.catalina.Store</code> interface.  You
       <strong>must</strong> specify
-      <code>org.apache.catalina.session.DataSourceStore</code>
+      <code>org.apache.catalina.session.JDBCStore</code>
       to use this implementation.</p>
     </attribute>
 
+    <attribute name="connectionName" required="true">
+      <p>The user name that will be handed to the configured JDBC driver to
+      establish a connection to the database containing the session table.</p>
+    </attribute>
+
+    <attribute name="connectionPassword" required="true">
+      <p>The password that will be handed to the configured JDBC driver to
+      establish a connection to the database containing the session table.</p>
+    </attribute>
+
+    <attribute name="connectionURL" required="true">
+      <p>The connection URL that will be handed to the configured JDBC
+      driver to establish a connection to the database containing our
+      session table.</p>
+    </attribute>
+
     <attribute name="dataSourceName" required="false">
-      <p>Name of the JNDI resource for a JDBC DataSource-factory. Since this
-      code uses prepared statements, you might want to configure pooled
-      prepared statements as shown in
-       <a href="../jndi-resources-howto.html">the JNDI resources
+      <p>Name of the JNDI resource for a JDBC DataSource-factory. If this option
+      is given and a valid JDBC resource can be found, it will be used and any
+      direct configuration of a JDBC connection via <code>connectionURL</code>,
+      <code>connectionName</code>, <code>connectionPassword</code> and
+      <code>driverName</code> will be ignored. Since this code uses prepared
+      statements, you might want to configure pooled prepared statements as
+      shown in <a href="../jndi-resources-howto.html">the JNDI resources
       How-To</a>.</p>
+    </attribute>
+
+    <attribute name="driverName" required="true">
+      <p>Java class name of the JDBC driver to be used.</p>
     </attribute>
 
     <attribute name="localDataSource" required="false">
@@ -509,7 +552,7 @@
 
   </attributes>
 
-  <p>Before attempting to use the data source Store for the first time,
+  <p>Before attempting to use the JDBC Based Store for the first time,
   you must create the table that will be used to store swapped out sessions.
   Detailed SQL commands vary depending on the database you are using, but
   a script like this will generally be required:</p>
@@ -525,8 +568,14 @@
 );</source>
 
   <p>Note: The SQL command above does not use the default names for either the
-  table or the columns so the data source Store would need to be configured
-  to reflect this.</p>
+  table or the columns so the JDBC Store would need to be configured to reflect
+  this.</p>
+
+  <p>In order for the JDBC Based Store to successfully connect to your
+  database, the JDBC driver you configure must be visible to Tomcat's
+  internal class loader.  Generally, that means you must place the JAR
+  file containing this driver into the <code>$CATALINA_HOME/lib</code>
+  directory.</p>
 
 </section>
 
@@ -567,15 +616,16 @@
 
   </subsection>
 
-  <subsection name="Disable Session Persistence">
+  <subsection name="Enable Session Persistence">
 
     <p>As documented above, every web application by default has
-    standard manager implementation configured, and it performs session
-    persistence across restarts. To disable this persistence feature, create
+    standard manager implementation configured, which can perform session
+    persistence across restarts. To enable this persistence feature, create
     a <a href="context.html">Context</a> configuration file for your web
-    application and add the following element there:</p>
+    application and add the following element there (in this example,
+    it will save sessions to files named <code>SESSIONS.ser</code>):</p>
 
-    <source><![CDATA[<Manager pathname="" />]]></source>
+    <source><![CDATA[<Manager pathname="SESSIONS.ser" />]]></source>
   </subsection>
 
 </section>

@@ -148,10 +148,15 @@ public class TestCustomSsl extends TomcatBaseTest {
         int rc = -1;
         try {
             rc = getUrl("https://localhost:" + getPort() + "/protected", res, null, null);
-        } catch (SocketException | SSLException e) {
+        } catch (SocketException se) {
             if (!trustType.equals(TrustType.NONE)) {
-                Assert.fail(e.getMessage());
-                e.printStackTrace();
+                Assert.fail(se.getMessage());
+                se.printStackTrace();
+            }
+        } catch (SSLException he) {
+            if (!trustType.equals(TrustType.NONE)) {
+                Assert.fail(he.getMessage());
+                he.printStackTrace();
             }
         }
 

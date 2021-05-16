@@ -360,10 +360,10 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
 
     /**
      * Should Tomcat call
-     * {@link org.apache.juli.logging.LogFactory#release(ClassLoader)} when the
-     * class loader is stopped? If not specified, the default value of
-     * <code>true</code> is used. Changing the default setting is likely to lead
-     * to memory leaks and other issues.
+     * {@link org.apache.juli.logging.LogFactory#release(ClassLoader)}
+     * when the class loader is stopped? If not specified, the default value
+     * of <code>true</code> is used. Changing the default setting is likely to
+     * lead to memory leaks and other issues.
      */
     private boolean clearReferencesLogFactoryRelease = true;
 
@@ -504,7 +504,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
                     path = f.getCanonicalPath();
                 } catch (IOException | URISyntaxException e) {
                     log.warn(sm.getString(
-                            "webappClassLoader.addPermissionNoCanonicalFile",
+                            "webappClassLoader.addPermisionNoCanonicalFile",
                             url.toExternalForm()));
                     return;
                 }
@@ -521,7 +521,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             } else {
                 // Unsupported URL protocol
                 log.warn(sm.getString(
-                        "webappClassLoader.addPermissionNoProtocol",
+                        "webappClassLoader.addPermisionNoProtocol",
                         protocol, url.toExternalForm()));
             }
         }
@@ -1802,9 +1802,8 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
                                 usingExecutor = true;
                             }
                         }
-                    } catch (NoSuchFieldException | IllegalAccessException | RuntimeException e) {
-                        // InaccessibleObjectException is only available in Java 9+,
-                        // swapped for RuntimeException
+                    } catch (SecurityException | NoSuchFieldException | IllegalArgumentException |
+                            IllegalAccessException e) {
                         log.warn(sm.getString("webappClassLoader.stopThreadFail",
                                 thread.getName(), getContextName()), e);
                     }
@@ -1978,8 +1977,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             if (jreCompat.isInstanceOfInaccessibleObjectException(t)) {
                 // Must be running on Java 9 without the necessary command line
                 // options.
-                String currentModule = JreCompat.getInstance().getModuleName(this.getClass());
-                log.warn(sm.getString("webappClassLoader.addExportsThreadLocal", currentModule));
+                log.warn(sm.getString("webappClassLoader.addExportsThreadLocal"));
             } else {
                 ExceptionUtils.handleThrowable(t);
                 log.warn(sm.getString(
@@ -2241,8 +2239,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             if (jreCompat.isInstanceOfInaccessibleObjectException(e)) {
                 // Must be running on Java 9 without the necessary command line
                 // options.
-                String currentModule = JreCompat.getInstance().getModuleName(this.getClass());
-                log.warn(sm.getString("webappClassLoader.addExportsRmi", currentModule));
+                log.warn(sm.getString("webappClassLoader.addExportsRmi"));
             } else {
                 // Re-throw all other exceptions
                 throw e;
@@ -2259,18 +2256,6 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
         } catch (ReflectiveOperationException | SecurityException | ClassCastException e) {
             log.warn(sm.getString(
                     "webappClassLoader.clearObjectStreamClassCachesFail", getContextName()), e);
-        } catch (Exception e) {
-            JreCompat jreCompat = JreCompat.getInstance();
-            if (jreCompat.isInstanceOfInaccessibleObjectException(e)) {
-                // Must be running on Java 9 without the necessary command line
-                // options.
-                String currentModule = JreCompat.getInstance().getModuleName(this.getClass());
-                log.warn(sm.getString("webappClassLoader.addExportsJavaIo", currentModule));
-                return;
-            } else {
-                // Re-throw all other exceptions
-                throw e;
-            }
         }
     }
 
@@ -2547,7 +2532,36 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             return false;
 
         char ch;
-        if (name.startsWith("javax")) {
+        if (name.startsWith("jakarta")) {
+            /* 7 == length("jakarta") */
+            if (name.length() == 7) {
+                return false;
+            }
+            ch = name.charAt(7);
+            if (isClassName && ch == '.') {
+                /* 8 == length("jakarta.") */
+                if (name.startsWith("servlet.jsp.jstl.", 8)) {
+                    return false;
+                }
+                if (name.startsWith("el.", 8) ||
+                    name.startsWith("servlet.", 8) ||
+                    name.startsWith("websocket.", 8) ||
+                    name.startsWith("security.auth.message.", 8)) {
+                    return true;
+                }
+            } else if (!isClassName && ch == '/') {
+                /* 8 == length("jakarta/") */
+                if (name.startsWith("servlet/jsp/jstl/", 8)) {
+                    return false;
+                }
+                if (name.startsWith("el/", 8) ||
+                    name.startsWith("servlet/", 8) ||
+                    name.startsWith("websocket/", 8) ||
+                    name.startsWith("security/auth/message/", 8)) {
+                    return true;
+                }
+            }
+        } else if (name.startsWith("javax")) {
             /* 5 == length("javax") */
             if (name.length() == 5) {
                 return false;
@@ -2555,24 +2569,12 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             ch = name.charAt(5);
             if (isClassName && ch == '.') {
                 /* 6 == length("javax.") */
-                if (name.startsWith("servlet.jsp.jstl.", 6)) {
-                    return false;
-                }
-                if (name.startsWith("el.", 6) ||
-                    name.startsWith("servlet.", 6) ||
-                    name.startsWith("websocket.", 6) ||
-                    name.startsWith("security.auth.message.", 6)) {
+                if (name.startsWith("websocket.", 6)) {
                     return true;
                 }
             } else if (!isClassName && ch == '/') {
                 /* 6 == length("javax/") */
-                if (name.startsWith("servlet/jsp/jstl/", 6)) {
-                    return false;
-                }
-                if (name.startsWith("el/", 6) ||
-                    name.startsWith("servlet/", 6) ||
-                    name.startsWith("websocket/", 6) ||
-                    name.startsWith("security/auth/message/", 6)) {
+                if (name.startsWith("websocket/", 6)) {
                     return true;
                 }
             }

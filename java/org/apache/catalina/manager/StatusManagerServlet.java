@@ -34,10 +34,11 @@ import javax.management.Notification;
 import javax.management.NotificationListener;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.util.ServerInfo;
 import org.apache.tomcat.util.modeler.Registry;
@@ -323,7 +324,7 @@ public class StatusManagerServlet
                 args[5] = smClient.getString("htmlManagerServlet.connectorStateProcessingTime");
                 args[6] = smClient.getString("htmlManagerServlet.connectorStateRequestCount");
                 args[7] = smClient.getString("htmlManagerServlet.connectorStateErrorCount");
-                args[8] = smClient.getString("htmlManagerServlet.connectorStateBytesReceived");
+                args[8] = smClient.getString("htmlManagerServlet.connectorStateBytesRecieved");
                 args[9] = smClient.getString("htmlManagerServlet.connectorStateBytesSent");
                 args[10] = smClient.getString("htmlManagerServlet.connectorStateTableTitleStage");
                 args[11] = smClient.getString("htmlManagerServlet.connectorStateTableTitleTime");

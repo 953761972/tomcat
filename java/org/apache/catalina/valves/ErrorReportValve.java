@@ -25,9 +25,9 @@ import java.io.Writer;
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
@@ -94,25 +94,17 @@ public class ErrorReportValve extends ValveBase {
         if (response.isCommitted()) {
             if (response.setErrorReported()) {
                 // Error wasn't previously reported but we can't write an error
-                // page because the response has already been committed.
-
-                // See if IO is allowed
-                AtomicBoolean ioAllowed = new AtomicBoolean(true);
-                response.getCoyoteResponse().action(ActionCode.IS_IO_ALLOWED, ioAllowed);
-
-                if (ioAllowed.get()) {
-                    // I/O is currently still allowed. Flush any data that is
-                    // still to be written to the client.
-                    try {
-                        response.flushBuffer();
-                    } catch (Throwable t) {
-                        ExceptionUtils.handleThrowable(t);
-                    }
-                    // Now close immediately to signal to the client that
-                    // something went wrong
-                    response.getCoyoteResponse().action(ActionCode.CLOSE_NOW,
-                            request.getAttribute(RequestDispatcher.ERROR_EXCEPTION));
+                // page because the response has already been committed. Attempt
+                // to flush any data that is still to be written to the client.
+                try {
+                    response.flushBuffer();
+                } catch (Throwable t) {
+                    ExceptionUtils.handleThrowable(t);
                 }
+                // Close immediately to signal to the client that something went
+                // wrong
+                response.getCoyoteResponse().action(ActionCode.CLOSE_NOW,
+                        request.getAttribute(RequestDispatcher.ERROR_EXCEPTION));
             }
             return;
         }
@@ -328,7 +320,9 @@ public class ErrorReportValve extends ValveBase {
                 writer.write(sb.toString());
                 response.finishResponse();
             }
-        } catch (IOException | IllegalStateException e) {
+        } catch (IOException e) {
+            // Ignore
+        } catch (IllegalStateException e) {
             // Ignore
         }
 
@@ -337,7 +331,7 @@ public class ErrorReportValve extends ValveBase {
 
     /**
      * Print out a partial servlet stack trace (truncating at the last
-     * occurrence of javax.servlet.).
+     * occurrence of jakarta.servlet.).
      * @param t The stack trace to process
      * @return the stack trace relative to the application layer
      */

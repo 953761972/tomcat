@@ -27,13 +27,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -574,7 +572,7 @@ public class TestTomcat extends TomcatBaseTest {
             tomcat.start();
             Assert.fail();
         } catch (Throwable t) {
-            assertThat(getRootCause(t), instanceOf(LifecycleException.class));
+            Assert.assertTrue(getRootCause(t) instanceof LifecycleException);
         }
     }
 
@@ -592,7 +590,7 @@ public class TestTomcat extends TomcatBaseTest {
             tomcat.start();
             Assert.fail();
         } catch (Throwable t) {
-            assertThat(getRootCause(t), instanceOf(MultiThrowable.class));
+            Assert.assertTrue(getRootCause(t) instanceof MultiThrowable);
         }
     }
 

@@ -25,11 +25,11 @@ import org.apache.catalina.util.URLEncoder;
 
 public class Substitution {
 
-    public abstract static class SubstitutionElement {
+    public abstract class SubstitutionElement {
         public abstract String evaluate(Matcher rule, Matcher cond, Resolver resolver);
     }
 
-    public static class StaticElement extends SubstitutionElement {
+    public class StaticElement extends SubstitutionElement {
         public String value;
 
         @Override
@@ -59,7 +59,7 @@ public class Substitution {
         }
     }
 
-    public static class RewriteCondBackReferenceElement extends SubstitutionElement {
+    public class RewriteCondBackReferenceElement extends SubstitutionElement {
         public int n;
         @Override
         public String evaluate(Matcher rule, Matcher cond, Resolver resolver) {
@@ -67,7 +67,7 @@ public class Substitution {
         }
     }
 
-    public static class ServerVariableElement extends SubstitutionElement {
+    public class ServerVariableElement extends SubstitutionElement {
         public String key;
         @Override
         public String evaluate(Matcher rule, Matcher cond, Resolver resolver) {
@@ -75,7 +75,7 @@ public class Substitution {
         }
     }
 
-    public static class ServerVariableEnvElement extends SubstitutionElement {
+    public class ServerVariableEnvElement extends SubstitutionElement {
         public String key;
         @Override
         public String evaluate(Matcher rule, Matcher cond, Resolver resolver) {
@@ -83,7 +83,7 @@ public class Substitution {
         }
     }
 
-    public static class ServerVariableSslElement extends SubstitutionElement {
+    public class ServerVariableSslElement extends SubstitutionElement {
         public String key;
         @Override
         public String evaluate(Matcher rule, Matcher cond, Resolver resolver) {
@@ -91,7 +91,7 @@ public class Substitution {
         }
     }
 
-    public static class ServerVariableHttpElement extends SubstitutionElement {
+    public class ServerVariableHttpElement extends SubstitutionElement {
         public String key;
         @Override
         public String evaluate(Matcher rule, Matcher cond, Resolver resolver) {
@@ -125,10 +125,10 @@ public class Substitution {
     }
 
     public void parse(Map<String, RewriteMap> maps) {
-        this.elements = parseSubstitution(sub, maps);
+        this.elements = parseSubtitution(sub, maps);
     }
 
-    private SubstitutionElement[] parseSubstitution(String sub, Map<String, RewriteMap> maps) {
+    private SubstitutionElement[] parseSubtitution(String sub, Map<String, RewriteMap> maps) {
 
         List<SubstitutionElement> elements = new ArrayList<>();
         int pos = 0;
@@ -197,9 +197,9 @@ public class Substitution {
                     } else {
                         key = sub.substring(colon + 1, close);
                     }
-                    newElement.key = parseSubstitution(key, maps);
+                    newElement.key = parseSubtitution(key, maps);
                     if (defaultValue != null) {
-                        newElement.defaultValue = parseSubstitution(defaultValue, maps);
+                        newElement.defaultValue = parseSubtitution(defaultValue, maps);
                     }
                     pos = close + 1;
                     elements.add(newElement);

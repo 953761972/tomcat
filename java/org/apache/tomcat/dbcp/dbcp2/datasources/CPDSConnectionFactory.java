@@ -37,7 +37,8 @@ import org.apache.tomcat.dbcp.pool2.PooledObjectFactory;
 import org.apache.tomcat.dbcp.pool2.impl.DefaultPooledObject;
 
 /**
- * A {@link PooledObjectFactory} that creates {@link org.apache.tomcat.dbcp.dbcp2.PoolableConnection PoolableConnection}s.
+ * A {@link PooledObjectFactory} that creates
+ * {@link org.apache.tomcat.dbcp.dbcp2.PoolableConnection PoolableConnection}s.
  *
  * @since 2.0
  */
@@ -58,7 +59,8 @@ class CPDSConnectionFactory
     /**
      * Map of PooledConnections for which close events are ignored. Connections are muted when they are being validated.
      */
-    private final Set<PooledConnection> validatingSet = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<PooledConnection> validatingSet = Collections
+            .newSetFromMap(new ConcurrentHashMap<PooledConnection, Boolean>());
 
     /**
      * Map of PooledConnectionAndInfo instances
@@ -149,7 +151,7 @@ class CPDSConnectionFactory
 
     @Override
     public synchronized PooledObject<PooledConnectionAndInfo> makeObject() {
-        final PooledConnectionAndInfo pci;
+        PooledConnectionAndInfo pci;
         try {
             PooledConnection pc = null;
             if (userName == null) {
@@ -225,7 +227,11 @@ class CPDSConnectionFactory
                 conn = pconn.getConnection();
                 stmt = conn.createStatement();
                 rset = stmt.executeQuery(validationQuery);
-                valid = rset.next();
+                if (rset.next()) {
+                    valid = true;
+                } else {
+                    valid = false;
+                }
                 if (rollbackAfterValidation) {
                     conn.rollback();
                 }

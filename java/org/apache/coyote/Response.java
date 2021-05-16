@@ -23,11 +23,12 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import javax.servlet.WriteListener;
+import jakarta.servlet.WriteListener;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -50,8 +51,8 @@ import org.apache.tomcat.util.res.StringManager;
 public final class Response {
 
     private static final StringManager sm = StringManager.getManager(Response.class);
-    private static final Log log = LogFactory.getLog(Response.class);
 
+    private static final Log log = LogFactory.getLog(Response.class);
 
     // ----------------------------------------------------- Class Variables
 
@@ -122,12 +123,12 @@ public final class Response {
 
     // General informations
     private long contentWritten = 0;
-    private long commitTime = -1;
+    private long commitTimeNanos = -1;
 
     /**
-     * Holds response writing error exception.
+     * Holds request error exception.
      */
-    private Exception errorException = null;
+    Exception errorException = null;
 
     /**
      * With the introduction of async processing and the possibility of
@@ -258,7 +259,7 @@ public final class Response {
 
     public void setCommitted(boolean v) {
         if (v && !this.committed) {
-            this.commitTime = System.currentTimeMillis();
+            this.commitTimeNanos = System.nanoTime();
         }
         this.committed = v;
     }
@@ -269,14 +270,22 @@ public final class Response {
      * @return the time the response was committed
      */
     public long getCommitTime() {
-        return commitTime;
+        return System.currentTimeMillis() - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - commitTimeNanos);
+    }
+
+    /**
+     * Return the time the response was committed (based on System.nanoTime).
+     *
+     * @return the time the response was committed
+     */
+    public long getCommitTimeNanos() {
+        return commitTimeNanos;
     }
 
     // -----------------Error State --------------------
 
     /**
-     * Set the error Exception that occurred during the writing of the response
-     * processing.
+     * Set the error Exception that occurred during request processing.
      *
      * @param ex The exception that occurred
      */
@@ -286,7 +295,7 @@ public final class Response {
 
 
     /**
-     * Get the Exception that occurred during the writing of the response.
+     * Get the Exception that occurred during request processing.
      *
      * @return The exception that occurred
      */
@@ -296,7 +305,7 @@ public final class Response {
 
 
     public boolean isExceptionPresent() {
-        return errorException != null;
+        return ( errorException != null );
     }
 
 
@@ -456,9 +465,7 @@ public final class Response {
     public void setLocale(Locale locale) {
 
         if (locale == null) {
-            this.locale = null;
-            this.contentLanguage = null;
-            return;
+            return;  // throw an exception?
         }
 
         // Save the locale for use by getLocale()
@@ -493,13 +500,11 @@ public final class Response {
             return;
         }
         if (characterEncoding == null) {
-            this.charset = null;
-            this.characterEncoding = null;
             return;
         }
 
-        this.characterEncoding = characterEncoding;
         this.charset = B2CConverter.getCharset(characterEncoding);
+        this.characterEncoding = characterEncoding;
     }
 
 
@@ -549,7 +554,14 @@ public final class Response {
 
         String charsetValue = m.getCharset();
 
-        if (charsetValue != null) {
+        if (charsetValue == null) {
+            // No charset and we know value is valid as parser was successful
+            // Pass-through user provided value in case user-agent is buggy and
+            // requires specific format
+            this.contentType = type;
+        } else {
+            // There is a charset so have to rebuild content-type without it
+            this.contentType = m.toStringNoCharset();
             charsetValue = charsetValue.trim();
             if (charsetValue.length() > 0) {
                 try {
@@ -620,17 +632,15 @@ public final class Response {
         status = 200;
         message = null;
         committed = false;
-        commitTime = -1;
+        commitTimeNanos = -1;
         errorException = null;
         errorState.set(0);
         headers.clear();
         trailerFieldsSupplier = null;
         // Servlet 3.1 non-blocking write listener
         listener = null;
-        synchronized (nonBlockingStateLock) {
-            fireListener = false;
-            registeredForWrite = false;
-        }
+        fireListener = false;
+        registeredForWrite = false;
 
         // update counters
         contentWritten=0;
@@ -669,16 +679,13 @@ public final class Response {
      * need access to state.
      */
     volatile WriteListener listener;
-    // Ensures listener is only fired after a call is isReady()
     private boolean fireListener = false;
-    // Tracks write registration to prevent duplicate registrations
     private boolean registeredForWrite = false;
-    // Lock used to manage concurrent access to above flags
     private final Object nonBlockingStateLock = new Object();
 
     public WriteListener getWriteListener() {
         return listener;
-    }
+}
 
     public void setWriteListener(WriteListener listener) {
         if (listener == null) {

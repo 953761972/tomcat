@@ -17,12 +17,11 @@
 package org.apache.catalina.core;
 
 /**
- * Holds APR status.
+ * Holds APR status without the need to load other classes.
  */
 public class AprStatus {
     private static volatile boolean aprInitialized = false;
     private static volatile boolean aprAvailable = false;
-    private static volatile boolean useAprConnector = false;
     private static volatile boolean useOpenSSL = true;
     private static volatile boolean instanceCreated = false;
 
@@ -33,10 +32,6 @@ public class AprStatus {
 
     public static boolean isAprAvailable() {
         return aprAvailable;
-    }
-
-    public static boolean getUseAprConnector() {
-        return useAprConnector;
     }
 
     public static boolean getUseOpenSSL() {
@@ -53,10 +48,6 @@ public class AprStatus {
 
     public static void setAprAvailable(boolean aprAvailable) {
         AprStatus.aprAvailable = aprAvailable;
-    }
-
-    public static void setUseAprConnector(boolean useAprConnector) {
-        AprStatus.useAprConnector = useAprConnector;
     }
 
     public static void setUseOpenSSL(boolean useOpenSSL) {

@@ -128,7 +128,9 @@ public class ContainerMBean extends BaseCatalinaMBean<ContainerBase> {
         ObjectName oname;
         try {
             oname = new ObjectName(valveName);
-        } catch (MalformedObjectNameException | NullPointerException e) {
+        } catch (MalformedObjectNameException e) {
+            throw new MBeanException(e);
+        } catch (NullPointerException e) {
             throw new MBeanException(e);
         }
 

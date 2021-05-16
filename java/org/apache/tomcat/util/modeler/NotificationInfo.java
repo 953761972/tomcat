@@ -30,7 +30,7 @@ import javax.management.MBeanNotificationInfo;
  */
 public class NotificationInfo extends FeatureInfo {
 
-    private static final long serialVersionUID = -6319885418912650856L;
+    static final long serialVersionUID = -6319885418912650856L;
 
     // ----------------------------------------------------- Instance Variables
 

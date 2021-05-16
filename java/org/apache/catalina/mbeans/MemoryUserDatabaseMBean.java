@@ -136,7 +136,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
         try {
             MBeanUtils.createMBean(group);
         } catch (Exception e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.createMBeanError.group", groupname), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.createMBeanError.group", groupname));
+            iae.initCause(e);
+            throw iae;
         }
         return findGroup(groupname);
     }
@@ -155,7 +157,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
         try {
             MBeanUtils.createMBean(role);
         } catch (Exception e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.createMBeanError.role", rolename), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.createMBeanError.role", rolename));
+            iae.initCause(e);
+            throw iae;
         }
         return findRole(rolename);
     }
@@ -175,7 +179,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
         try {
             MBeanUtils.createMBean(user);
         } catch (Exception e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.createMBeanError.user", username), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.createMBeanError.user", username));
+            iae.initCause(e);
+            throw iae;
         }
         return findUser(username);
     }
@@ -198,7 +204,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
             ObjectName oname = MBeanUtils.createObjectName(managedGroup.getDomain(), group);
             return oname.toString();
         } catch (MalformedObjectNameException e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.createError.group", groupname), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.createError.group", groupname));
+            iae.initCause(e);
+            throw iae;
         }
     }
 
@@ -220,7 +228,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
             ObjectName oname = MBeanUtils.createObjectName(managedRole.getDomain(), role);
             return oname.toString();
         } catch (MalformedObjectNameException e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.createError.role", rolename), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.createError.role", rolename));
+            iae.initCause(e);
+            throw iae;
         }
 
     }
@@ -243,7 +253,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
             ObjectName oname = MBeanUtils.createObjectName(managedUser.getDomain(), user);
             return oname.toString();
         } catch (MalformedObjectNameException e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.createError.user", username), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.createError.user", username));
+            iae.initCause(e);
+            throw iae;
         }
     }
 
@@ -263,7 +275,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
             MBeanUtils.destroyMBean(group);
             database.removeGroup(group);
         } catch (Exception e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.destroyError.group", groupname), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.destroyError.group", groupname));
+            iae.initCause(e);
+            throw iae;
         }
     }
 
@@ -283,7 +297,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
             MBeanUtils.destroyMBean(role);
             database.removeRole(role);
         } catch (Exception e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.destroyError.role", rolename), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.destroyError.role", rolename));
+            iae.initCause(e);
+            throw iae;
         }
     }
 
@@ -303,7 +319,9 @@ public class MemoryUserDatabaseMBean extends BaseModelMBean {
             MBeanUtils.destroyMBean(user);
             database.removeUser(user);
         } catch (Exception e) {
-            throw new IllegalArgumentException(sm.getString("userMBean.destroyError.user", username), e);
+            IllegalArgumentException iae = new IllegalArgumentException(sm.getString("userMBean.destroyError.user", username));
+            iae.initCause(e);
+            throw iae;
         }
     }
 }

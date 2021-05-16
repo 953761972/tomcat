@@ -33,10 +33,11 @@ import javax.net.ssl.HandshakeCompletedListener;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.junit.Assert;
 import org.junit.Assume;
@@ -79,12 +80,6 @@ public class TestSsl extends TomcatBaseTest {
     }
 
     private static final int POST_DATA_SIZE = 16 * 1024 * 1024;
-    private static final byte[] POST_DATA;
-    static {
-        POST_DATA = new byte[POST_DATA_SIZE]; // 16MB
-        Arrays.fill(POST_DATA, (byte) 1);
-
-    }
 
     @Test
     public void testPost() throws Exception {
@@ -112,12 +107,15 @@ public class TestSsl extends TomcatBaseTest {
 
                         OutputStream os = socket.getOutputStream();
 
+                        byte[] bytes = new byte[POST_DATA_SIZE]; // 16MB
+                        Arrays.fill(bytes, (byte) 1);
+
                         os.write("POST /post HTTP/1.1\r\n".getBytes());
                         os.write("Host: localhost\r\n".getBytes());
-                        os.write(("Content-Length: " + Integer.valueOf(POST_DATA.length) + "\r\n\r\n").getBytes());
+                        os.write(("Content-Length: " + Integer.valueOf(bytes.length) + "\r\n\r\n").getBytes());
                         // Write in 128KB blocks
-                        for (int i = 0; i < POST_DATA.length / (128 * 1024); i++) {
-                            os.write(POST_DATA, 0, 1024 * 128);
+                        for (int i = 0; i < bytes.length / (128 * 1024); i++) {
+                            os.write(bytes, 0, 1024 * 128);
                             Thread.sleep(10);
                         }
                         os.flush();
@@ -128,24 +126,18 @@ public class TestSsl extends TomcatBaseTest {
                         byte[] endOfHeaders = "\r\n\r\n".getBytes();
                         int found = 0;
                         while (found != endOfHeaders.length) {
-                            int c = is.read();
-                            if (c == -1) {
-                                // EOF
-                                System.err.println("Unexpected EOF");
-                                errorCount.incrementAndGet();
-                                break;
-                            } else if (c == endOfHeaders[found]) {
+                            if (is.read() == endOfHeaders[found]) {
                                 found++;
                             } else {
                                 found = 0;
                             }
                         }
 
-                        for (int i = 0; i < POST_DATA.length; i++) {
+                        for (int i = 0; i < bytes.length; i++) {
                             int read = is.read();
-                            if (POST_DATA[i] != read) {
+                            if (bytes[i] != read) {
                                 System.err.println("Byte in position [" + i + "] had value [" + read +
-                                        "] rather than [" + Byte.toString(POST_DATA[i]) + "]");
+                                        "] rather than [" + Byte.toString(bytes[i]) + "]");
                                 errorCount.incrementAndGet();
                                 break;
                             }
@@ -261,11 +253,7 @@ public class TestSsl extends TomcatBaseTest {
         char[] endOfHeaders ="\r\n\r\n".toCharArray();
         int found = 0;
         while (found != endOfHeaders.length) {
-            int c = r.read();
-            if (c == -1) {
-                // EOF
-                Assert.fail("Unexpected EOF");
-            } else if (c == endOfHeaders[found]) {
+            if (r.read() == endOfHeaders[found]) {
                 found++;
             } else {
                 found = 0;
@@ -294,7 +282,7 @@ public class TestSsl extends TomcatBaseTest {
         }
     }
 
-    public static class SimplePostServlet extends HttpServlet {
+    public class SimplePostServlet extends HttpServlet {
 
         private static final long serialVersionUID = 1L;
 

@@ -27,7 +27,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,17 +101,6 @@ public abstract class AbstractEndpoint<S,U> {
 
 
         /**
-         * Obtain the currently open sockets.
-         *
-         * @return The sockets for which the handler is tracking a currently
-         *         open connection
-         * @deprecated Unused, will be removed in Tomcat 10, replaced
-         *         by AbstractEndpoint.getConnections
-         */
-        @Deprecated
-        public Set<S> getOpenSockets();
-
-        /**
          * Release any resources associated with the given SocketWrapper.
          *
          * @param socketWrapper The socketWrapper to release resources for
@@ -136,26 +124,7 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
     protected enum BindState {
-        UNBOUND(false, false),
-        BOUND_ON_INIT(true, true),
-        BOUND_ON_START(true, true),
-        SOCKET_CLOSED_ON_STOP(false, true);
-
-        private final boolean bound;
-        private final boolean wasBound;
-
-        private BindState(boolean bound, boolean wasBound) {
-            this.bound = bound;
-            this.wasBound = wasBound;
-        }
-
-        public boolean isBound() {
-            return bound;
-        }
-
-        public boolean wasBound() {
-            return wasBound;
-        }
+        UNBOUND, BOUND_ON_INIT, BOUND_ON_START, SOCKET_CLOSED_ON_STOP
     }
 
 
@@ -224,15 +193,11 @@ public abstract class AbstractEndpoint<S,U> {
     // ----------------------------------------------------------------- Properties
 
     private String defaultSSLHostConfigName = SSLHostConfig.DEFAULT_SSL_HOST_NAME;
-    /**
-     * @return The host name for the default SSL configuration for this endpoint
-     *         - always in lower case.
-     */
     public String getDefaultSSLHostConfigName() {
         return defaultSSLHostConfigName;
     }
     public void setDefaultSSLHostConfigName(String defaultSSLHostConfigName) {
-        this.defaultSSLHostConfigName = defaultSSLHostConfigName.toLowerCase(Locale.ENGLISH);
+        this.defaultSSLHostConfigName = defaultSSLHostConfigName;
     }
 
 
@@ -309,15 +274,12 @@ public abstract class AbstractEndpoint<S,U> {
         if (hostName == null) {
             return null;
         }
-        // Host names are case insensitive but stored/processed in lower case
-        // internally because they are used as keys in a ConcurrentMap where
-        // keys are compared in a case sensitive manner.
-        String hostNameLower = hostName.toLowerCase(Locale.ENGLISH);
-        if (hostNameLower.equals(getDefaultSSLHostConfigName())) {
+        // Host names are case insensitive
+        if (hostName.equalsIgnoreCase(getDefaultSSLHostConfigName())) {
             throw new IllegalArgumentException(
                     sm.getString("endpoint.removeDefaultSslHostConfig", hostName));
         }
-        SSLHostConfig sslHostConfig = sslHostConfigs.remove(hostNameLower);
+        SSLHostConfig sslHostConfig = sslHostConfigs.remove(hostName);
         unregisterJmx(sslHostConfig);
         return sslHostConfig;
     }
@@ -330,13 +292,7 @@ public abstract class AbstractEndpoint<S,U> {
      *                 reloaded. This must match a current SSL host
      */
     public void reloadSslHostConfig(String hostName) {
-        // Host names are case insensitive but stored/processed in lower case
-        // internally because they are used as keys in a ConcurrentMap where
-        // keys are compared in a case sensitive manner.
-        // This method can be called via various paths so convert the supplied
-        // host name to lower case here to ensure the conversion occurs whatever
-        // the call path.
-        SSLHostConfig sslHostConfig = sslHostConfigs.get(hostName.toLowerCase(Locale.ENGLISH));
+        SSLHostConfig sslHostConfig = sslHostConfigs.get(hostName);
         if (sslHostConfig == null) {
             throw new IllegalArgumentException(
                     sm.getString("endpoint.unknownSslHostName", hostName));
@@ -384,7 +340,7 @@ public abstract class AbstractEndpoint<S,U> {
      *                      released
      */
     protected void releaseSSLContext(SSLHostConfig sslHostConfig) {
-        for (SSLHostConfigCertificate certificate : sslHostConfig.getCertificates(true)) {
+        for (SSLHostConfigCertificate certificate : sslHostConfig.getCertificates()) {
             if (certificate.getSslContext() != null) {
                 SSLContext sslContext = certificate.getSslContext();
                 if (sslContext != null) {
@@ -395,18 +351,7 @@ public abstract class AbstractEndpoint<S,U> {
     }
 
 
-    /**
-     * Look up the SSLHostConfig for the given host name. Lookup order is:
-     * <ol>
-     * <li>exact match</li>
-     * <li>wild card match</li>
-     * <li>default SSLHostConfig</li>
-     * </ol>
-     *
-     * @param sniHostName   Host name - must be in lower case
-     *
-     * @return The SSLHostConfig for the given host name.
-     */
+
     protected SSLHostConfig getSSLHostConfig(String sniHostName) {
         SSLHostConfig result = null;
 
@@ -467,26 +412,6 @@ public abstract class AbstractEndpoint<S,U> {
      * Acceptor thread count.
      */
     protected int acceptorThreadCount = 1;
-
-    /**
-     * NO-OP.
-     *
-     * @param acceptorThreadCount Unused
-     *
-     * @deprecated Will be removed in Tomcat 10.
-     */
-    @Deprecated
-    public void setAcceptorThreadCount(int acceptorThreadCount) {}
-
-    /**
-     * Always returns 1.
-     *
-     * @return Always 1.
-     *
-     * @deprecated Will be removed in Tomcat 10.
-     */
-    @Deprecated
-    public int getAcceptorThreadCount() { return 1; }
 
 
     /**
@@ -649,9 +574,6 @@ public abstract class AbstractEndpoint<S,U> {
     public boolean getBindOnInit() { return bindOnInit; }
     public void setBindOnInit(boolean b) { this.bindOnInit = b; }
     private volatile BindState bindState = BindState.UNBOUND;
-    protected BindState getBindState() {
-        return bindState;
-    }
 
     /**
      * Keepalive timeout, if not set the soTimeout is used.
@@ -787,12 +709,7 @@ public abstract class AbstractEndpoint<S,U> {
      */
     private int maxKeepAliveRequests=100; // as in Apache HTTPD server
     public int getMaxKeepAliveRequests() {
-        // Disable keep-alive if the server socket is not bound
-        if (bindState.isBound()) {
-            return maxKeepAliveRequests;
-        } else {
-            return 1;
-        }
+        return maxKeepAliveRequests;
     }
     public void setMaxKeepAliveRequests(int maxKeepAliveRequests) {
         this.maxKeepAliveRequests = maxKeepAliveRequests;
@@ -833,17 +750,8 @@ public abstract class AbstractEndpoint<S,U> {
     public boolean getUseAsyncIO() { return useAsyncIO; }
 
 
-    protected abstract boolean getDeferAccept();
-
-
-    /**
-     * The default behavior is to identify connectors uniquely with address
-     * and port. However, certain connectors are not using that and need
-     * some other identifier, which then can be used as a replacement.
-     * @return the id
-     */
-    public String getId() {
-        return null;
+    protected boolean getDeferAccept() {
+        return false;
     }
 
 
@@ -1016,7 +924,7 @@ public abstract class AbstractEndpoint<S,U> {
     /**
      * Unlock the server socket acceptor threads using bogus connections.
      */
-    protected void unlockAccept() {
+    private void unlockAccept() {
         // Only try to unlock the acceptor if it is necessary
         if (acceptor == null || acceptor.getState() != AcceptorState.RUNNING) {
             return;
@@ -1394,16 +1302,6 @@ public abstract class AbstractEndpoint<S,U> {
      */
     public final void closeServerSocketGraceful() {
         if (bindState == BindState.BOUND_ON_START) {
-            // Stop accepting new connections
-            acceptor.stop(-1);
-            // Release locks that may be preventing the acceptor from stopping
-            releaseConnectionLatch();
-            unlockAccept();
-            // Signal to any multiplexed protocols (HTTP/2) that they may wish
-            // to stop accepting new streams
-            getHandler().pause();
-            // Update the bindState. This has the side-effect of disabling
-            // keep-alive for any in-progress connections
             bindState = BindState.SOCKET_CLOSED_ON_STOP;
             try {
                 doCloseServerSocket();
@@ -1411,30 +1309,6 @@ public abstract class AbstractEndpoint<S,U> {
                 getLog().warn(sm.getString("endpoint.serverSocket.closeFailed", getName()), ioe);
             }
         }
-    }
-
-
-    /**
-     * Wait for the client connections to the server to close gracefully. The
-     * method will return when all of the client connections have closed or the
-     * method has been waiting for {@code waitTimeMillis}.
-     *
-     * @param waitMillis    The maximum time to wait in milliseconds for the
-     *                      client connections to close.
-     *
-     * @return The wait time, if any remaining when the method returned
-     */
-    public final long awaitConnectionsClose(long waitMillis) {
-        while (waitMillis > 0 && !connections.isEmpty()) {
-            try {
-                Thread.sleep(50);
-                waitMillis -= 50;
-            } catch (InterruptedException e) {
-                Thread.interrupted();
-                waitMillis = 0;
-            }
-        }
-        return waitMillis;
     }
 
 

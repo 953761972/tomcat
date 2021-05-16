@@ -228,7 +228,8 @@ public class FarmWarDeployer extends ClusterListener
                     File deployable = new File(getDeployDirFile(), name);
                     try {
                         String contextName = fmsg.getContextName();
-                        if (tryAddServiced(contextName)) {
+                        if (!isServiced(contextName)) {
+                            addServiced(contextName);
                             try {
                                 remove(contextName);
                                 if (!factory.getFile().renameTo(deployable)) {
@@ -236,10 +237,10 @@ public class FarmWarDeployer extends ClusterListener
                                             "farmWarDeployer.renameFail",
                                             factory.getFile(), deployable));
                                 }
+                                check(contextName);
                             } finally {
                                 removeServiced(contextName);
                             }
-                            check(contextName);
                             if (log.isDebugEnabled())
                                 log.debug(sm.getString(
                                         "farmWarDeployer.deployEnd",
@@ -261,7 +262,8 @@ public class FarmWarDeployer extends ClusterListener
                     if (log.isDebugEnabled())
                         log.debug(sm.getString("farmWarDeployer.msgRxUndeploy",
                                 contextName));
-                    if (tryAddServiced(contextName)) {
+                    if (!isServiced(contextName)) {
+                        addServiced(contextName);
                         try {
                             remove(contextName);
                         } finally {
@@ -418,13 +420,13 @@ public class FarmWarDeployer extends ClusterListener
         // remove locally
         if (undeploy) {
             try {
-                if (tryAddServiced(contextName)) {
+                if (!isServiced(contextName)) {
+                    addServiced(contextName);
                     try {
                         remove(contextName);
                     } finally {
                         removeServiced(contextName);
                     }
-                    check(contextName);
                 } else
                     log.error(sm.getString("farmWarDeployer.removeFailRemote",
                             contextName));
@@ -456,13 +458,14 @@ public class FarmWarDeployer extends ClusterListener
                 log.info(sm.getString("farmWarDeployer.modInstall",
                         cn.getName(), deployWar.getAbsolutePath()));
             // install local
-            if (tryAddServiced(cn.getName())) {
+            if (!isServiced(cn.getName())) {
+                addServiced(cn.getName());
                 try {
                     copy(newWar, deployWar);
+                    check(cn.getName());
                 } finally {
                     removeServiced(cn.getName());
                 }
-                check(cn.getName());
             } else {
                 log.error(sm.getString("farmWarDeployer.servicingDeploy",
                         cn.getName(), deployWar.getName()));
@@ -520,7 +523,10 @@ public class FarmWarDeployer extends ClusterListener
                     log.error(sm.getString("farmWarDeployer.deleteFail", xml));
                 }
             }
+            // Perform new deployment and remove internal HostConfig state
+            check(contextName);
         }
+
     }
 
     /**
@@ -588,9 +594,7 @@ public class FarmWarDeployer extends ClusterListener
      * @param name The context name
      * @return <code>true</code> if the context is being serviced
      * @throws Exception Error invoking the deployer
-     * @deprecated Unused. Will be removed in Tomcat 10.1.x onwards.
      */
-    @Deprecated
     protected boolean isServiced(String name) throws Exception {
         String[] params = { name };
         String[] signature = { "java.lang.String" };
@@ -603,28 +607,11 @@ public class FarmWarDeployer extends ClusterListener
      * Mark a context as being services.
      * @param name The context name
      * @throws Exception Error invoking the deployer
-     * @deprecated Unused. Will be removed in Tomcat 10.1.x onwards.
-     *             Use {@link #tryAddServiced}
      */
-    @Deprecated
     protected void addServiced(String name) throws Exception {
         String[] params = { name };
         String[] signature = { "java.lang.String" };
         mBeanServer.invoke(oname, "addServiced", params, signature);
-    }
-
-    /**
-     * Attempt to mark a context as being serviced
-     * @param name The context name
-     * @return {@code true} if the application was marked as being serviced and
-     *         {@code false} if the application was already marked as being serviced
-     * @throws Exception Error invoking the deployer
-     */
-    protected boolean tryAddServiced(String name) throws Exception {
-        String[] params = { name };
-        String[] signature = { "java.lang.String" };
-        Boolean result = (Boolean) mBeanServer.invoke(oname, "tryAddServiced", params, signature);
-        return result.booleanValue();
     }
 
     /**

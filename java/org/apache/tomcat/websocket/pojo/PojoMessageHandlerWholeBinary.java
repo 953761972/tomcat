@@ -20,15 +20,15 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
-import javax.naming.NamingException;
-import javax.websocket.DecodeException;
-import javax.websocket.Decoder;
-import javax.websocket.Decoder.Binary;
-import javax.websocket.Decoder.BinaryStream;
-import javax.websocket.EndpointConfig;
-import javax.websocket.Session;
+import jakarta.websocket.DecodeException;
+import jakarta.websocket.Decoder;
+import jakarta.websocket.Decoder.Binary;
+import jakarta.websocket.Decoder.BinaryStream;
+import jakarta.websocket.EndpointConfig;
+import jakarta.websocket.Session;
 
 import org.apache.tomcat.util.res.StringManager;
 
@@ -40,6 +40,8 @@ public class PojoMessageHandlerWholeBinary
 
     private static final StringManager sm =
             StringManager.getManager(PojoMessageHandlerWholeBinary.class);
+
+    private final List<Decoder> decoders = new ArrayList<>();
 
     private final boolean isForInputStream;
 
@@ -64,11 +66,13 @@ public class PojoMessageHandlerWholeBinary
             if (decoderClazzes != null) {
                 for (Class<? extends Decoder> decoderClazz : decoderClazzes) {
                     if (Binary.class.isAssignableFrom(decoderClazz)) {
-                        Binary<?> decoder = (Binary<?>) createDecoderInstance(decoderClazz);
+                        Binary<?> decoder = (Binary<?>) decoderClazz.getConstructor().newInstance();
                         decoder.init(config);
                         decoders.add(decoder);
-                    } else if (BinaryStream.class.isAssignableFrom(decoderClazz)) {
-                        BinaryStream<?> decoder = (BinaryStream<?>) createDecoderInstance(decoderClazz);
+                    } else if (BinaryStream.class.isAssignableFrom(
+                            decoderClazz)) {
+                        BinaryStream<?> decoder = (BinaryStream<?>)
+                                decoderClazz.getConstructor().newInstance();
                         decoder.init(config);
                         decoders.add(decoder);
                     } else {
@@ -76,7 +80,7 @@ public class PojoMessageHandlerWholeBinary
                     }
                 }
             }
-        } catch (ReflectiveOperationException | NamingException e) {
+        } catch (ReflectiveOperationException e) {
             throw new IllegalArgumentException(e);
         }
         this.isForInputStream = isForInputStream;
@@ -114,6 +118,14 @@ public class PojoMessageHandlerWholeBinary
             return new ByteArrayInputStream(array);
         } else {
             return array;
+        }
+    }
+
+
+    @Override
+    protected void onClose() {
+        for (Decoder decoder : decoders) {
+            decoder.destroy();
         }
     }
 }

@@ -18,7 +18,7 @@
 <project name="Apache Tomcat Documentation"
         href="https://tomcat.apache.org/">
 
-    <title>Apache Tomcat 9</title>
+    <title>Apache Tomcat 10</title>
 
     <logo href="/images/tomcat.gif">
       The Apache Tomcat Servlet/JSP Container
@@ -75,21 +75,20 @@
         <item name="32) WebSocket"          href="web-socket-howto.html"/>
         <item name="33) Rewrite"            href="rewrite.html"/>
         <item name="34) CDI 2 and JAX-RS"   href="cdi.html"/>
-        <item name="35) AOT/GraalVM Support"
-              href="graal.html"/>
+        <item name="35) GraalVM Support"    href="graal.html"/>
     </menu>
 
     <menu name="Reference">
         <item name="Release Notes"         href="RELEASE-NOTES.txt"/>
         <item name="Configuration"         href="config/index.html"/>
         <item name="Tomcat Javadocs"       href="api/index.html"/>
-        <item name="Servlet 4.0 Javadocs"  href="servletapi/index.html"/>
-        <item name="JSP 2.3 Javadocs"      href="jspapi/index.html"/>
-        <item name="EL 3.0 Javadocs"       href="elapi/index.html"/>
-        <item name="WebSocket 1.1 Javadocs"
+        <item name="Servlet 5.0 Javadocs"  href="servletapi/index.html"/>
+        <item name="JSP 3.0 Javadocs"      href="jspapi/index.html"/>
+        <item name="EL 4.0 Javadocs"       href="elapi/index.html"/>
+        <item name="WebSocket 2.0 Javadocs"
               href="websocketapi/index.html"/>
-        <item name="JASPIC 1.1 Javadocs"   href="jaspicapi/index.html"/>
-        <item name="Common Annotations 1.3 Javadocs"
+        <item name="JASPIC 2.0 Javadocs"   href="jaspicapi/index.html"/>
+        <item name="Annotations 2.0 Javadocs"
               href="annotationapi/index.html"/>
         <item name="JK 1.2 Documentation"
               href="https://tomcat.apache.org/connectors-doc/"/>

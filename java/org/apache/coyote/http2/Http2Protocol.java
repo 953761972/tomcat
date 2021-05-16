@@ -17,42 +17,21 @@
 package org.apache.coyote.http2;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
-
-import javax.management.ObjectName;
 
 import org.apache.coyote.AbstractProtocol;
 import org.apache.coyote.Adapter;
-import org.apache.coyote.CompressionConfig;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.coyote.Processor;
 import org.apache.coyote.Request;
-import org.apache.coyote.RequestGroupInfo;
 import org.apache.coyote.Response;
 import org.apache.coyote.UpgradeProtocol;
 import org.apache.coyote.UpgradeToken;
 import org.apache.coyote.http11.AbstractHttp11Protocol;
 import org.apache.coyote.http11.upgrade.InternalHttpUpgradeHandler;
 import org.apache.coyote.http11.upgrade.UpgradeProcessorInternal;
-import org.apache.juli.logging.Log;
-import org.apache.juli.logging.LogFactory;
-import org.apache.tomcat.util.buf.StringUtils;
-import org.apache.tomcat.util.modeler.Registry;
 import org.apache.tomcat.util.net.SocketWrapperBase;
-import org.apache.tomcat.util.res.StringManager;
 
 public class Http2Protocol implements UpgradeProtocol {
-
-    private static final Log log = LogFactory.getLog(Http2Protocol.class);
-    private static final StringManager sm = StringManager.getManager(Http2Protocol.class);
 
     static final long DEFAULT_READ_TIMEOUT = 5000;
     static final long DEFAULT_WRITE_TIMEOUT = 5000;
@@ -89,12 +68,8 @@ public class Http2Protocol implements UpgradeProtocol {
     // change the default defined in ConnectionSettingsBase.
     private int initialWindowSize = ConnectionSettingsBase.DEFAULT_INITIAL_WINDOW_SIZE;
     // Limits
-    private Set<String> allowedTrailerHeaders =
-            Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private int maxHeaderCount = Constants.DEFAULT_MAX_HEADER_COUNT;
-    private int maxHeaderSize = Constants.DEFAULT_MAX_HEADER_SIZE;
     private int maxTrailerCount = Constants.DEFAULT_MAX_TRAILER_COUNT;
-    private int maxTrailerSize = Constants.DEFAULT_MAX_TRAILER_SIZE;
     private int overheadCountFactor = DEFAULT_OVERHEAD_COUNT_FACTOR;
     private int overheadContinuationThreshold = DEFAULT_OVERHEAD_CONTINUATION_THRESHOLD;
     private int overheadDataThreshold = DEFAULT_OVERHEAD_DATA_THRESHOLD;
@@ -102,12 +77,8 @@ public class Http2Protocol implements UpgradeProtocol {
 
     private boolean initiatePingDisabled = false;
     private boolean useSendfile = true;
-    // Compression
-    private final CompressionConfig compressionConfig = new CompressionConfig();
     // Reference to HTTP/1.1 protocol that this instance is configured under
     private AbstractHttp11Protocol<?> http11Protocol = null;
-
-    private RequestGroupInfo global = new RequestGroupInfo();
 
     @Override
     public String getHttpUpgradeName(boolean isSSLEnabled) {
@@ -130,10 +101,8 @@ public class Http2Protocol implements UpgradeProtocol {
 
     @Override
     public Processor getProcessor(SocketWrapperBase<?> socketWrapper, Adapter adapter) {
-        String upgradeProtocol = getUpgradeProtocolName();
         UpgradeProcessorInternal processor = new UpgradeProcessorInternal(socketWrapper,
-                new UpgradeToken(getInternalUpgradeHandler(socketWrapper, adapter, null), null, null, upgradeProtocol),
-                null);
+                new UpgradeToken(getInternalUpgradeHandler(socketWrapper, adapter, null), null, null));
         return processor;
     }
 
@@ -259,37 +228,8 @@ public class Http2Protocol implements UpgradeProtocol {
     }
 
 
-    public void setAllowedTrailerHeaders(String commaSeparatedHeaders) {
-        // Jump through some hoops so we don't end up with an empty set while
-        // doing updates.
-        Set<String> toRemove = new HashSet<>();
-        toRemove.addAll(allowedTrailerHeaders);
-        if (commaSeparatedHeaders != null) {
-            String[] headers = commaSeparatedHeaders.split(",");
-            for (String header : headers) {
-                String trimmedHeader = header.trim().toLowerCase(Locale.ENGLISH);
-                if (toRemove.contains(trimmedHeader)) {
-                    toRemove.remove(trimmedHeader);
-                } else {
-                    allowedTrailerHeaders.add(trimmedHeader);
-                }
-            }
-            allowedTrailerHeaders.removeAll(toRemove);
-        }
-    }
-
-
-    public String getAllowedTrailerHeaders() {
-        // Chances of a size change between these lines are small enough that a
-        // sync is unnecessary.
-        List<String> copy = new ArrayList<>(allowedTrailerHeaders.size());
-        copy.addAll(allowedTrailerHeaders);
-        return StringUtils.join(copy);
-    }
-
-
     boolean isTrailerHeaderAllowed(String headerName) {
-        return allowedTrailerHeaders.contains(headerName);
+        return http11Protocol.isTrailerHeaderAllowed(headerName);
     }
 
 
@@ -303,13 +243,8 @@ public class Http2Protocol implements UpgradeProtocol {
     }
 
 
-    public void setMaxHeaderSize(int maxHeaderSize) {
-        this.maxHeaderSize = maxHeaderSize;
-    }
-
-
     public int getMaxHeaderSize() {
-        return maxHeaderSize;
+        return http11Protocol.getMaxHttpHeaderSize();
     }
 
 
@@ -323,13 +258,8 @@ public class Http2Protocol implements UpgradeProtocol {
     }
 
 
-    public void setMaxTrailerSize(int maxTrailerSize) {
-        this.maxTrailerSize = maxTrailerSize;
-    }
-
-
     public int getMaxTrailerSize() {
-        return maxTrailerSize;
+        return http11Protocol.getMaxTrailerSize();
     }
 
 
@@ -383,64 +313,8 @@ public class Http2Protocol implements UpgradeProtocol {
     }
 
 
-    public void setCompression(String compression) {
-        compressionConfig.setCompression(compression);
-    }
-    public String getCompression() {
-        return compressionConfig.getCompression();
-    }
-    protected int getCompressionLevel() {
-        return compressionConfig.getCompressionLevel();
-    }
-
-
-    public String getNoCompressionUserAgents() {
-        return compressionConfig.getNoCompressionUserAgents();
-    }
-    protected Pattern getNoCompressionUserAgentsPattern() {
-        return compressionConfig.getNoCompressionUserAgentsPattern();
-    }
-    public void setNoCompressionUserAgents(String noCompressionUserAgents) {
-        compressionConfig.setNoCompressionUserAgents(noCompressionUserAgents);
-    }
-
-
-    public String getCompressibleMimeType() {
-        return compressionConfig.getCompressibleMimeType();
-    }
-    public void setCompressibleMimeType(String valueS) {
-        compressionConfig.setCompressibleMimeType(valueS);
-    }
-    public String[] getCompressibleMimeTypes() {
-        return compressionConfig.getCompressibleMimeTypes();
-    }
-
-
-    public int getCompressionMinSize() {
-        return compressionConfig.getCompressionMinSize();
-    }
-    public void setCompressionMinSize(int compressionMinSize) {
-        compressionConfig.setCompressionMinSize(compressionMinSize);
-    }
-
-
-    @Deprecated
-    public boolean getNoCompressionStrongETag() {
-        return compressionConfig.getNoCompressionStrongETag();
-    }
-    @Deprecated
-    public void setNoCompressionStrongETag(boolean noCompressionStrongETag) {
-        compressionConfig.setNoCompressionStrongETag(noCompressionStrongETag);
-    }
-
-
     public boolean useCompression(Request request, Response response) {
-        return compressionConfig.useCompression(request, response);
-    }
-
-
-    public ContinueResponseTiming getContinueResponseTimingInternal() {
-        return http11Protocol.getContinueResponseTimingInternal();
+        return http11Protocol.useCompression(request, response);
     }
 
 
@@ -448,33 +322,8 @@ public class Http2Protocol implements UpgradeProtocol {
         return this.http11Protocol;
     }
 
-
     @Override
-    public void setHttp11Protocol(AbstractHttp11Protocol<?> http11Protocol) {
-        this.http11Protocol = http11Protocol;
-
-        try {
-            ObjectName oname = this.http11Protocol.getONameForUpgrade(getUpgradeProtocolName());
-            // This can be null when running the testsuite
-            if (oname != null) {
-                Registry.getRegistry(null, null).registerComponent(global, oname, null);
-            }
-        } catch (Exception e) {
-            log.warn(sm.getString("http2Protocol.jmxRegistration.fail"), e);
-        }
-    }
-
-
-    public String getUpgradeProtocolName() {
-        if (http11Protocol.isSSLEnabled()) {
-            return ALPN_NAME;
-        } else {
-            return HTTP_UPGRADE_NAME;
-        }
-    }
-
-
-    public RequestGroupInfo getGlobal() {
-        return global;
+    public void setHttp11Protocol(AbstractProtocol<?> http11Protocol) {
+        this.http11Protocol = (AbstractHttp11Protocol<?>) http11Protocol;
     }
 }

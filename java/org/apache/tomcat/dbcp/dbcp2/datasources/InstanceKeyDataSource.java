@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.logging.Logger;
 
@@ -531,7 +532,7 @@ public abstract class InstanceKeyDataSource implements DataSource, Referenceable
     }
 
     /**
-     * Sets the back end ConnectionPoolDataSource. This property should not be set if using JNDI to access the
+     * Sets the backend ConnectionPoolDataSource. This property should not be set if using JNDI to access the
      * data source.
      *
      * @param v
@@ -688,7 +689,7 @@ public abstract class InstanceKeyDataSource implements DataSource, Referenceable
 
     /**
      * Gets the value of jndiEnvironment which is used when instantiating a JNDI InitialContext. This InitialContext is
-     * used to locate the back end ConnectionPoolDataSource.
+     * used to locate the backend ConnectionPoolDataSource.
      *
      * @param key
      *            JNDI environment key.
@@ -704,7 +705,7 @@ public abstract class InstanceKeyDataSource implements DataSource, Referenceable
 
     /**
      * Sets the value of the given JNDI environment property to be used when instantiating a JNDI InitialContext. This
-     * InitialContext is used to locate the back end ConnectionPoolDataSource.
+     * InitialContext is used to locate the backend ConnectionPoolDataSource.
      *
      * @param key
      *            the JNDI environment property to set.
@@ -720,7 +721,7 @@ public abstract class InstanceKeyDataSource implements DataSource, Referenceable
 
     /**
      * Sets the JNDI environment to be used when instantiating a JNDI InitialContext. This InitialContext is used to
-     * locate the back end ConnectionPoolDataSource.
+     * locate the backend ConnectionPoolDataSource.
      *
      * @param properties
      *            the JNDI environment property to set which will overwrite any current settings
@@ -912,7 +913,13 @@ public abstract class InstanceKeyDataSource implements DataSource, Referenceable
         PooledConnectionAndInfo info = null;
         try {
             info = getPooledConnectionAndInfo(userName, userPassword);
-        } catch (final RuntimeException | SQLException e) {
+        } catch (final NoSuchElementException e) {
+            closeDueToException(info);
+            throw new SQLException("Cannot borrow connection from pool", e);
+        } catch (final RuntimeException e) {
+            closeDueToException(info);
+            throw e;
+        } catch (final SQLException e) {
             closeDueToException(info);
             throw e;
         } catch (final Exception e) {
@@ -946,7 +953,13 @@ public abstract class InstanceKeyDataSource implements DataSource, Referenceable
             for (int i = 0; i < 10; i++) { // Bound the number of retries - only needed if bad instances return
                 try {
                     info = getPooledConnectionAndInfo(userName, userPassword);
-                } catch (final RuntimeException | SQLException e) {
+                } catch (final NoSuchElementException e) {
+                    closeDueToException(info);
+                    throw new SQLException("Cannot borrow connection from pool", e);
+                } catch (final RuntimeException e) {
+                    closeDueToException(info);
+                    throw e;
+                } catch (final SQLException e) {
                     closeDueToException(info);
                     throw e;
                 } catch (final Exception e) {

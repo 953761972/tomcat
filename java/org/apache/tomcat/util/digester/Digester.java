@@ -24,13 +24,16 @@ import java.io.UnsupportedEncodingException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.Permission;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EmptyStackException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.PropertyPermission;
 import java.util.Set;
 import java.util.StringTokenizer;
 
@@ -45,6 +48,7 @@ import org.apache.tomcat.util.IntrospectionUtils;
 import org.apache.tomcat.util.IntrospectionUtils.PropertySource;
 import org.apache.tomcat.util.buf.B2CConverter;
 import org.apache.tomcat.util.res.StringManager;
+import org.apache.tomcat.util.security.PermissionCheck;
 import org.xml.sax.Attributes;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.ErrorHandler;
@@ -171,20 +175,29 @@ public class Digester extends DefaultHandler2 {
     // --------------------------------------------------- Instance Variables
 
 
-    /**
-     * A {@link org.apache.tomcat.util.IntrospectionUtils.SecurePropertySource}
-     * that uses environment variables to resolve expressions. Still available
-     * for backwards compatibility.
-     *
-     * @deprecated Use {@link org.apache.tomcat.util.digester.EnvironmentPropertySource}
-     *             This will be removed in Tomcat 10 onwards.
-     */
-    @Deprecated
-    public static class EnvironmentPropertySource extends org.apache.tomcat.util.digester.EnvironmentPropertySource {
+    private static class SystemPropertySource implements IntrospectionUtils.SecurePropertySource {
+
+        @Override
+        public String getProperty(String key) {
+            // For backward compatibility
+            return getProperty(key, null);
+        }
+
+        @Override
+        public String getProperty(String key, ClassLoader classLoader) {
+            if (classLoader instanceof PermissionCheck) {
+                Permission p = new PropertyPermission(key, "read");
+                if (!((PermissionCheck) classLoader).check(p)) {
+                    return null;
+                }
+            }
+            return System.getProperty(key);
+        }
     }
 
 
-    protected IntrospectionUtils.PropertySource[] source;
+    protected IntrospectionUtils.PropertySource[] source = new IntrospectionUtils.PropertySource[] {
+            new SystemPropertySource() };
 
 
     /**
@@ -368,20 +381,12 @@ public class Digester extends DefaultHandler2 {
 
     public Digester() {
         propertySourcesSet = true;
-        ArrayList<IntrospectionUtils.PropertySource> sourcesList = new ArrayList<>();
-        boolean systemPropertySourceFound = false;
         if (propertySources != null) {
-            for (IntrospectionUtils.PropertySource source : propertySources) {
-                if (source instanceof SystemPropertySource) {
-                    systemPropertySourceFound = true;
-                }
-                sourcesList.add(source);
-            }
+            ArrayList<IntrospectionUtils.PropertySource> sourcesList = new ArrayList<>();
+            sourcesList.addAll(Arrays.asList(propertySources));
+            sourcesList.add(source[0]);
+            source = sourcesList.toArray(new IntrospectionUtils.PropertySource[0]);
         }
-        if (!systemPropertySourceFound) {
-            sourcesList.add(new SystemPropertySource());
-        }
-        source = sourcesList.toArray(new IntrospectionUtils.PropertySource[0]);
     }
 
 

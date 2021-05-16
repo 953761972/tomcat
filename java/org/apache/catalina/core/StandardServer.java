@@ -933,7 +933,12 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
 
         if (periodicEventDelay > 0) {
             monitorFuture = getUtilityExecutor().scheduleWithFixedDelay(
-                    () -> startPeriodicLifecycleEvent(), 0, 60, TimeUnit.SECONDS);
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            startPeriodicLifecycleEvent();
+                        }
+                    }, 0, 60, TimeUnit.SECONDS);
         }
     }
 
@@ -949,7 +954,12 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
                 }
             }
             periodicLifecycleEventFuture = getUtilityExecutor().scheduleAtFixedRate(
-                    () -> fireLifecycleEvent(Lifecycle.PERIODIC_EVENT, null), periodicEventDelay, periodicEventDelay, TimeUnit.SECONDS);
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            fireLifecycleEvent(Lifecycle.PERIODIC_EVENT, null);
+                        }
+                    }, periodicEventDelay, periodicEventDelay, TimeUnit.SECONDS);
         }
     }
 
@@ -1031,7 +1041,9 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
                                         f.getName().endsWith(".jar")) {
                                     ExtensionValidator.addSystemResource(f);
                                 }
-                            } catch (URISyntaxException | IOException e) {
+                            } catch (URISyntaxException e) {
+                                // Ignore
+                            } catch (IOException e) {
                                 // Ignore
                             }
                         }

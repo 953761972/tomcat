@@ -59,7 +59,8 @@ class KeyedCPDSConnectionFactory implements KeyedPooledObjectFactory<UserPassKey
     /**
      * Map of PooledConnections for which close events are ignored. Connections are muted when they are being validated.
      */
-    private final Set<PooledConnection> validatingSet = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<PooledConnection> validatingSet = Collections
+            .newSetFromMap(new ConcurrentHashMap<PooledConnection, Boolean>());
 
     /**
      * Map of PooledConnectionAndInfo instances
@@ -112,6 +113,8 @@ class KeyedCPDSConnectionFactory implements KeyedPooledObjectFactory<UserPassKey
      */
     @Override
     public synchronized PooledObject<PooledConnectionAndInfo> makeObject(final UserPassKey upkey) throws Exception {
+        PooledConnectionAndInfo pci = null;
+
         PooledConnection pc = null;
         final String userName = upkey.getUsername();
         final String password = upkey.getPassword();
@@ -128,7 +131,7 @@ class KeyedCPDSConnectionFactory implements KeyedPooledObjectFactory<UserPassKey
         // should we add this object as a listener or the pool.
         // consider the validateObject method in decision
         pc.addConnectionEventListener(this);
-        final PooledConnectionAndInfo pci = new PooledConnectionAndInfo(pc, userName, upkey.getPasswordCharArray());
+        pci = new PooledConnectionAndInfo(pc, userName, upkey.getPasswordCharArray());
         pcMap.put(pc, pci);
 
         return new DefaultPooledObject<>(pci);
@@ -191,7 +194,11 @@ class KeyedCPDSConnectionFactory implements KeyedPooledObjectFactory<UserPassKey
                 conn = pconn.getConnection();
                 stmt = conn.createStatement();
                 rset = stmt.executeQuery(validationQuery);
-                valid = rset.next();
+                if (rset.next()) {
+                    valid = true;
+                } else {
+                    valid = false;
+                }
                 if (rollbackAfterValidation) {
                     conn.rollback();
                 }

@@ -33,23 +33,21 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import javax.naming.NamingException;
-import javax.websocket.CloseReason.CloseCode;
-import javax.websocket.CloseReason.CloseCodes;
-import javax.websocket.Decoder;
-import javax.websocket.Decoder.Binary;
-import javax.websocket.Decoder.BinaryStream;
-import javax.websocket.Decoder.Text;
-import javax.websocket.Decoder.TextStream;
-import javax.websocket.DeploymentException;
-import javax.websocket.Encoder;
-import javax.websocket.EndpointConfig;
-import javax.websocket.Extension;
-import javax.websocket.MessageHandler;
-import javax.websocket.PongMessage;
-import javax.websocket.Session;
+import jakarta.websocket.CloseReason.CloseCode;
+import jakarta.websocket.CloseReason.CloseCodes;
+import jakarta.websocket.Decoder;
+import jakarta.websocket.Decoder.Binary;
+import jakarta.websocket.Decoder.BinaryStream;
+import jakarta.websocket.Decoder.Text;
+import jakarta.websocket.Decoder.TextStream;
+import jakarta.websocket.DeploymentException;
+import jakarta.websocket.Encoder;
+import jakarta.websocket.EndpointConfig;
+import jakarta.websocket.Extension;
+import jakarta.websocket.MessageHandler;
+import jakarta.websocket.PongMessage;
+import jakarta.websocket.Session;
 
-import org.apache.tomcat.InstanceManager;
 import org.apache.tomcat.util.res.StringManager;
 import org.apache.tomcat.websocket.pojo.PojoMessageHandlerPartialBinary;
 import org.apache.tomcat.websocket.pojo.PojoMessageHandlerWholeBinary;
@@ -332,59 +330,26 @@ public class Util {
     }
 
 
-    /**
-     * Build the list of decoder entries from a set of decoder implementations.
-     *
-     * @param decoderClazzes Decoder implementation classes
-     *
-     * @return List of mappings from target type to associated decoder
-     *
-     * @throws DeploymentException If a provided decoder class is not valid
-     *
-     * @deprecated Will be removed in Tomcat 10.1.x.
-     *             Use {@link Util#getDecoders(List, InstanceManager)}
-     */
-    @Deprecated
-    public static List<DecoderEntry> getDecoders(List<Class<? extends Decoder>> decoderClazzes)
-            throws DeploymentException {
-        return getDecoders(decoderClazzes, null);
-    }
-
-
-    /**
-     * Build the list of decoder entries from a set of decoder implementations.
-     *
-     * @param decoderClazzes    Decoder implementation classes
-     * @param instanceManager   Instance manager to use to create Decoder
-     *                              instances
-     *
-     * @return List of mappings from target type to associated decoder
-     *
-     * @throws DeploymentException If a provided decoder class is not valid
-     */
-    public static List<DecoderEntry> getDecoders(List<Class<? extends Decoder>> decoderClazzes,
-            InstanceManager instanceManager) throws DeploymentException{
+    public static List<DecoderEntry> getDecoders(
+            List<Class<? extends Decoder>> decoderClazzes)
+                    throws DeploymentException{
 
         List<DecoderEntry> result = new ArrayList<>();
         if (decoderClazzes != null) {
             for (Class<? extends Decoder> decoderClazz : decoderClazzes) {
                 // Need to instantiate decoder to ensure it is valid and that
                 // deployment can be failed if it is not
+                @SuppressWarnings("unused")
                 Decoder instance;
                 try {
-                    if (instanceManager == null) {
-                        instance = decoderClazz.getConstructor().newInstance();
-                    } else {
-                        instance = (Decoder) instanceManager.newInstance(decoderClazz);
-                        // Don't need this instance, so destroy it
-                        instanceManager.destroyInstance(instance);
-                    }
-                } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException |
-                        NamingException e) {
+                    instance = decoderClazz.getConstructor().newInstance();
+                } catch (ReflectiveOperationException e) {
                     throw new DeploymentException(
-                            sm.getString("pojoMethodMapping.invalidDecoder", decoderClazz.getName()), e);
+                            sm.getString("pojoMethodMapping.invalidDecoder",
+                                    decoderClazz.getName()), e);
                 }
-                DecoderEntry entry = new DecoderEntry(Util.getDecoderType(decoderClazz), decoderClazz);
+                DecoderEntry entry = new DecoderEntry(
+                        Util.getDecoderType(decoderClazz), decoderClazz);
                 result.add(entry);
             }
         }
@@ -423,9 +388,8 @@ public class Util {
             boolean whole = MessageHandler.Whole.class.isAssignableFrom(listener.getClass());
             MessageHandlerResult result = new MessageHandlerResult(
                     whole ? new PojoMessageHandlerWholeBinary(listener,
-                                    getOnMessageMethod(listener), session, endpointConfig,
-                                    matchDecoders(target, endpointConfig, true,
-                                            ((WsSession) session).getInstanceManager()),
+                                    getOnMessageMethod(listener), session,
+                                    endpointConfig, matchDecoders(target, endpointConfig, true),
                                     new Object[1], 0, true, -1, false, -1) :
                             new PojoMessageHandlerPartialBinary(listener,
                                     getOnMessagePartialMethod(listener), session,
@@ -435,24 +399,23 @@ public class Util {
         } else if (InputStream.class.isAssignableFrom(target)) {
             MessageHandlerResult result = new MessageHandlerResult(
                     new PojoMessageHandlerWholeBinary(listener,
-                            getOnMessageMethod(listener), session, endpointConfig,
-                            matchDecoders(target, endpointConfig, true, ((WsSession) session).getInstanceManager()),
+                            getOnMessageMethod(listener), session,
+                            endpointConfig, matchDecoders(target, endpointConfig, true),
                             new Object[1], 0, true, -1, true, -1),
                     MessageHandlerResultType.BINARY);
             results.add(result);
         } else if (Reader.class.isAssignableFrom(target)) {
             MessageHandlerResult result = new MessageHandlerResult(
                     new PojoMessageHandlerWholeText(listener,
-                            getOnMessageMethod(listener), session, endpointConfig,
-                            matchDecoders(target, endpointConfig, false, ((WsSession) session).getInstanceManager()),
+                            getOnMessageMethod(listener), session,
+                            endpointConfig, matchDecoders(target, endpointConfig, false),
                             new Object[1], 0, true, -1, -1),
                     MessageHandlerResultType.TEXT);
             results.add(result);
         } else {
             // Handler needs wrapping and requires decoder to convert it to one
             // of the types expected by the frame handling code
-            DecoderMatch decoderMatch = matchDecoders(target, endpointConfig,
-                    ((WsSession) session).getInstanceManager());
+            DecoderMatch decoderMatch = matchDecoders(target, endpointConfig);
             Method m = getOnMessageMethod(listener);
             if (decoderMatch.getBinaryDecoders().size() > 0) {
                 MessageHandlerResult result = new MessageHandlerResult(
@@ -483,8 +446,8 @@ public class Util {
     }
 
     private static List<Class<? extends Decoder>> matchDecoders(Class<?> target,
-            EndpointConfig endpointConfig, boolean binary, InstanceManager instanceManager) {
-        DecoderMatch decoderMatch = matchDecoders(target, endpointConfig, instanceManager);
+            EndpointConfig endpointConfig, boolean binary) {
+        DecoderMatch decoderMatch = matchDecoders(target, endpointConfig);
         if (binary) {
             if (decoderMatch.getBinaryDecoders().size() > 0) {
                 return decoderMatch.getBinaryDecoders();
@@ -496,12 +459,12 @@ public class Util {
     }
 
     private static DecoderMatch matchDecoders(Class<?> target,
-            EndpointConfig endpointConfig, InstanceManager instanceManager) {
+            EndpointConfig endpointConfig) {
         DecoderMatch decoderMatch;
         try {
             List<Class<? extends Decoder>> decoders =
                     endpointConfig.getDecoders();
-            List<DecoderEntry> decoderEntries = getDecoders(decoders, instanceManager);
+            List<DecoderEntry> decoderEntries = getDecoders(decoders);
             decoderMatch = new DecoderMatch(target, decoderEntries);
         } catch (DeploymentException e) {
             throw new IllegalArgumentException(e);

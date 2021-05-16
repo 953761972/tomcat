@@ -28,25 +28,25 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import javax.servlet.ServletContextEvent;
-import javax.websocket.ClientEndpoint;
-import javax.websocket.ContainerProvider;
-import javax.websocket.DecodeException;
-import javax.websocket.Decoder;
-import javax.websocket.DeploymentException;
-import javax.websocket.EncodeException;
-import javax.websocket.Encoder;
-import javax.websocket.Endpoint;
-import javax.websocket.EndpointConfig;
-import javax.websocket.Extension;
-import javax.websocket.MessageHandler;
-import javax.websocket.OnError;
-import javax.websocket.OnMessage;
-import javax.websocket.Session;
-import javax.websocket.WebSocketContainer;
-import javax.websocket.server.ServerContainer;
-import javax.websocket.server.ServerEndpoint;
-import javax.websocket.server.ServerEndpointConfig;
+import jakarta.servlet.ServletContextEvent;
+import jakarta.websocket.ClientEndpoint;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.DecodeException;
+import jakarta.websocket.Decoder;
+import jakarta.websocket.DeploymentException;
+import jakarta.websocket.EncodeException;
+import jakarta.websocket.Encoder;
+import jakarta.websocket.Endpoint;
+import jakarta.websocket.EndpointConfig;
+import jakarta.websocket.Extension;
+import jakarta.websocket.MessageHandler;
+import jakarta.websocket.OnError;
+import jakarta.websocket.OnMessage;
+import jakarta.websocket.Session;
+import jakarta.websocket.WebSocketContainer;
+import jakarta.websocket.server.ServerContainer;
+import jakarta.websocket.server.ServerEndpoint;
+import jakarta.websocket.server.ServerEndpointConfig;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -69,7 +69,7 @@ public class TestEncodingDecoding extends TomcatBaseTest {
     private static final String PATH_MESSAGES_EP = "/echoMessagesEP";
     private static final String PATH_BATCHED_EP = "/echoBatchedEP";
 
-    private static final int WAIT_LOOPS = 100;
+    private static final int WAIT_LOOPS = 50;
     private static final int WAIT_DELAY = 100;
 
 
@@ -78,7 +78,7 @@ public class TestEncodingDecoding extends TomcatBaseTest {
         Tomcat tomcat = getTomcatInstance();
         // No file system docBase required
         Context ctx = tomcat.addContext("", null);
-        ctx.addApplicationListener(ProgrammaticServerEndpointConfig.class.getName());
+        ctx.addApplicationListener(ProgramaticServerEndpointConfig.class.getName());
         Tomcat.addServlet(ctx, "default", new DefaultServlet());
         ctx.addServletMappingDecoded("/", "default");
 
@@ -403,7 +403,7 @@ public class TestEncodingDecoding extends TomcatBaseTest {
         @OnMessage
         public String onMessage(String message, Session session) throws Exception {
             received.add(message);
-            session.getBasicRemote().sendText(MESSAGE_ONE);
+            session.getAsyncRemote().sendText(MESSAGE_ONE).get();
             return message;
         }
 
@@ -425,9 +425,9 @@ public class TestEncodingDecoding extends TomcatBaseTest {
         @OnMessage
         public String onMessage(String message, Session session) throws IOException {
             received.add(message);
-            session.getBasicRemote().setBatchingAllowed(true);
-            session.getBasicRemote().sendText(MESSAGE_ONE);
-            session.getBasicRemote().setBatchingAllowed(false);
+            session.getAsyncRemote().setBatchingAllowed(true);
+            session.getAsyncRemote().sendText(MESSAGE_ONE);
+            session.getAsyncRemote().setBatchingAllowed(false);
             return MESSAGE_TWO;
         }
 
@@ -698,7 +698,7 @@ public class TestEncodingDecoding extends TomcatBaseTest {
     }
 
 
-    public static class ProgrammaticServerEndpointConfig extends WsContextListener {
+    public static class ProgramaticServerEndpointConfig extends WsContextListener {
 
         @Override
         public void contextInitialized(ServletContextEvent sce) {
@@ -761,7 +761,7 @@ public class TestEncodingDecoding extends TomcatBaseTest {
         Tomcat tomcat = getTomcatInstance();
         // No file system docBase required
         Context ctx = tomcat.addContext("", null);
-        ctx.addApplicationListener(ProgrammaticServerEndpointConfig.class.getName());
+        ctx.addApplicationListener(ProgramaticServerEndpointConfig.class.getName());
         Tomcat.addServlet(ctx, "default", new DefaultServlet());
         ctx.addServletMappingDecoded("/", "default");
 

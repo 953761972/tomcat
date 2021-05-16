@@ -32,12 +32,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import javax.servlet.DispatcherType;
-import javax.servlet.ServletContext;
-import javax.servlet.SessionTrackingMode;
-import javax.servlet.descriptor.JspConfigDescriptor;
-import javax.servlet.descriptor.JspPropertyGroupDescriptor;
-import javax.servlet.descriptor.TaglibDescriptor;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.SessionTrackingMode;
+import jakarta.servlet.descriptor.JspConfigDescriptor;
+import jakarta.servlet.descriptor.JspPropertyGroupDescriptor;
+import jakarta.servlet.descriptor.TaglibDescriptor;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -182,6 +182,10 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Charse
                 majorVersion = 4;
                 minorVersion = 0;
                 break;
+            case "5.0":
+                majorVersion = 5;
+                minorVersion = 0;
+                break;
             default:
                 log.warn(sm.getString("webXml.version.unknown", version));
         }
@@ -233,8 +237,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Charse
     }
 
     // Derived major and minor version attributes
-    // Default to 4.0 until we know otherwise
-    private int majorVersion = 4;
+    private int majorVersion = 5;
     private int minorVersion = 0;
     public int getMajorVersion() { return majorVersion; }
     public int getMinorVersion() { return minorVersion; }
@@ -2388,7 +2391,13 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Charse
             names.add(fragment.getName());
         }
         for (WebXml fragment : group) {
-            fragment.getAfterOrdering().removeIf(entry -> !names.contains(entry));
+            Iterator<String> after = fragment.getAfterOrdering().iterator();
+            while (after.hasNext()) {
+                String entry = after.next();
+                if (!names.contains(entry)) {
+                    after.remove();
+                }
+            }
         }
     }
     private static void orderFragments(Set<WebXml> orderedFragments,

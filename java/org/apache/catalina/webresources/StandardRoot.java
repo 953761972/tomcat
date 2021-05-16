@@ -81,7 +81,7 @@ public class StandardRoot extends LifecycleMBeanBase implements WebResourceRoot 
 
     private boolean trackLockedFiles = false;
     private final Set<TrackedWebResource> trackedResources =
-            Collections.newSetFromMap(new ConcurrentHashMap<>());
+            Collections.newSetFromMap(new ConcurrentHashMap<TrackedWebResource,Boolean>());
 
     // Constructs to make iteration over all WebResourceSets simpler
     private final List<WebResourceSet> mainResources = new ArrayList<>();

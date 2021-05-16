@@ -55,6 +55,7 @@ public class TestVirtualContext extends TomcatBaseTest {
 
     @Test
     public void testVirtualClassLoader() throws Exception {
+
         Tomcat tomcat = getTomcatInstance();
 
         File appDir = new File("test/webapp-virtual-webapp/src/main/webapp");

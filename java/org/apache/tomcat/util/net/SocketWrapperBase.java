@@ -51,11 +51,7 @@ public abstract class SocketWrapperBase<E> {
     private volatile long readTimeout = -1;
     private volatile long writeTimeout = -1;
 
-    protected volatile IOException previousIOException = null;
-
     private volatile int keepAliveLeft = 100;
-    private volatile boolean upgraded = false;
-    private boolean secure = false;
     private String negotiatedProtocol = null;
 
     /*
@@ -173,34 +169,6 @@ public abstract class SocketWrapperBase<E> {
         }
     }
 
-    /**
-     * @return {@code true} if the connection has been upgraded.
-     *
-     * @deprecated Unused. Will be removed in Tomcat 10.
-     */
-    @Deprecated
-    public boolean isUpgraded() { return upgraded; }
-    /**
-     * @param upgraded {@code true} if the connection has been upgraded.
-     *
-     * @deprecated Unused. Will be removed in Tomcat 10.
-     */
-    @Deprecated
-    public void setUpgraded(boolean upgraded) { this.upgraded = upgraded; }
-    /**
-     * @return {@code true} if the connection uses TLS
-     *
-     * @deprecated Unused. Will be removed in Tomcat 10.
-     */
-    @Deprecated
-    public boolean isSecure() { return secure; }
-    /**
-     * @param secure {@code true} if the connection uses TLS
-     *
-     * @deprecated Unused. Will be removed in Tomcat 10.
-     */
-    @Deprecated
-    public void setSecure(boolean secure) { this.secure = secure; }
     public String getNegotiatedProtocol() { return negotiatedProtocol; }
     public void setNegotiatedProtocol(String negotiatedProtocol) {
         this.negotiatedProtocol = negotiatedProtocol;
@@ -1186,36 +1154,6 @@ public abstract class SocketWrapperBase<E> {
     }
 
     /**
-     * If an asynchronous read operation is pending, this method will block
-     * until the operation completes, or the specified amount of time
-     * has passed.
-     * @param timeout The maximum amount of time to wait
-     * @param unit The unit for the timeout
-     * @return <code>true</code> if the read operation is complete,
-     *  <code>false</code> if the operation is still pending and
-     *  the specified timeout has passed
-     */
-    @Deprecated
-    public boolean awaitReadComplete(long timeout, TimeUnit unit) {
-        return true;
-    }
-
-    /**
-     * If an asynchronous write operation is pending, this method will block
-     * until the operation completes, or the specified amount of time
-     * has passed.
-     * @param timeout The maximum amount of time to wait
-     * @param unit The unit for the timeout
-     * @return <code>true</code> if the read operation is complete,
-     *  <code>false</code> if the operation is still pending and
-     *  the specified timeout has passed
-     */
-    @Deprecated
-    public boolean awaitWriteComplete(long timeout, TimeUnit unit) {
-        return true;
-    }
-
-    /**
      * Scatter read. The completion handler will be called once some
      * data has been read or an error occurred. The default NIO2
      * behavior is used: the completion handler will be called as soon
@@ -1457,13 +1395,13 @@ public abstract class SocketWrapperBase<E> {
                         state.wait(unit.toMillis(timeout));
                         if (state.state == CompletionState.PENDING) {
                             if (handler != null && state.callHandler.compareAndSet(true, false)) {
-                                handler.failed(new SocketTimeoutException(getTimeoutMsg(read)), attachment);
+                                handler.failed(new SocketTimeoutException(), attachment);
                             }
                             return CompletionState.ERROR;
                         }
                     } catch (InterruptedException e) {
                         if (handler != null && state.callHandler.compareAndSet(true, false)) {
-                            handler.failed(new SocketTimeoutException(getTimeoutMsg(read)), attachment);
+                            handler.failed(new SocketTimeoutException(), attachment);
                         }
                         return CompletionState.ERROR;
                     }
@@ -1473,22 +1411,11 @@ public abstract class SocketWrapperBase<E> {
         return state.state;
     }
 
-
-    private String getTimeoutMsg(boolean read) {
-        if (read) {
-            return sm.getString("socketWrapper.readTimeout");
-        } else {
-            return sm.getString("socketWrapper.writeTimeout");
-        }
-    }
-
-
     protected abstract <A> OperationState<A> newOperationState(boolean read,
             ByteBuffer[] buffers, int offset, int length,
             BlockingMode block, long timeout, TimeUnit unit, A attachment,
             CompletionCheck check, CompletionHandler<Long, ? super A> handler,
             Semaphore semaphore, VectoredIOCompletionHandler<A> completion);
-
 
     // --------------------------------------------------------- Utility methods
 

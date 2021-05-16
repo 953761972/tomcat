@@ -18,7 +18,7 @@ package org.apache.catalina.ha.session;
 
 import java.io.IOException;
 
-import javax.servlet.ServletException;
+import jakarta.servlet.ServletException;
 
 import org.apache.catalina.Cluster;
 import org.apache.catalina.LifecycleException;
@@ -99,7 +99,7 @@ public class JvmRouteBinderValve extends ValveBase implements ClusterValve {
      */
     protected long numberOfSessions = 0;
 
-    protected String sessionIdAttribute = "org.apache.catalina.ha.session.JvmRouteOriginalSessionID";
+    protected String sessionIdAttribute = "org.apache.catalina.ha.session.JvmRouteOrignalSessionID";
 
 
     /*--Logic---------------------------------------------------*/
@@ -348,9 +348,9 @@ public class JvmRouteBinderValve extends ValveBase implements ClusterValve {
 
         // set original sessionid at request, to allow application detect the
         // change
-        if (sessionIdAttribute != null && !sessionIdAttribute.isEmpty()) {
+        if (sessionIdAttribute != null && !"".equals(sessionIdAttribute)) {
             if (log.isDebugEnabled()) {
-                log.debug(sm.getString("jvmRoute.set.originalsessionid",sessionIdAttribute,sessionId));
+                log.debug(sm.getString("jvmRoute.set.orignalsessionid",sessionIdAttribute,sessionId));
             }
             request.setAttribute(sessionIdAttribute, sessionId);
         }

@@ -19,7 +19,7 @@ package org.apache.catalina.valves.rewrite;
 import java.io.IOException;
 import java.io.PrintWriter;
 
-import javax.servlet.ServletException;
+import jakarta.servlet.ServletException;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -111,7 +111,7 @@ public class TestResolverSSL extends TomcatBaseTest {
             "SSL_SRP_USERINFO",
             "SSL_TLS_SNI" };
 
-    public static class ResolverTestValve extends ValveBase {
+    public class ResolverTestValve extends ValveBase {
 
         @Override
         public void invoke(Request request, Response response)

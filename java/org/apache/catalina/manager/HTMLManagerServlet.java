@@ -35,11 +35,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-import javax.servlet.http.Part;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.Part;
 
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
@@ -284,16 +284,17 @@ public final class HTMLManagerServlet extends ManagerServlet {
                     break;
                 }
 
-                if (tryAddServiced(name)) {
+                if (isServiced(name)) {
+                    message = smClient.getString("managerServlet.inService", name);
+                } else {
+                    addServiced(name);
                     try {
                         warPart.write(file.getAbsolutePath());
+                        // Perform new deployment
+                        check(name);
                     } finally {
                         removeServiced(name);
                     }
-                    // Perform new deployment
-                    check(name);
-                } else {
-                    message = smClient.getString("managerServlet.inService", name);
                 }
                 break;
             }
@@ -442,11 +443,10 @@ public final class HTMLManagerServlet extends ManagerServlet {
                 StringBuilder tmp = new StringBuilder();
                 tmp.append("path=");
                 tmp.append(URLEncoder.DEFAULT.encode(displayPath, StandardCharsets.UTF_8));
-                final String webappVersion = ctxt.getWebappVersion();
-                if (webappVersion != null && webappVersion.length() > 0) {
+                if (ctxt.getWebappVersion().length() > 0) {
                     tmp.append("&version=");
                     tmp.append(URLEncoder.DEFAULT.encode(
-                            webappVersion, StandardCharsets.UTF_8));
+                            ctxt.getWebappVersion(), StandardCharsets.UTF_8));
                 }
                 String pathVersion = tmp.toString();
 
@@ -463,10 +463,10 @@ public final class HTMLManagerServlet extends ManagerServlet {
                         + URLEncoder.DEFAULT.encode(contextPath + "/", StandardCharsets.UTF_8)
                         + "\" " + Constants.REL_EXTERNAL + ">"
                         + Escape.htmlElementContent(displayPath) + "</a>";
-                if (webappVersion == null || webappVersion.isEmpty()) {
+                if ("".equals(ctxt.getWebappVersion())) {
                     args[1] = noVersion;
                 } else {
-                    args[1] = Escape.htmlElementContent(webappVersion);
+                    args[1] = Escape.htmlElementContent(ctxt.getWebappVersion());
                 }
                 if (ctxt.getDisplayName() == null) {
                     args[2] = "&nbsp;";
@@ -793,15 +793,15 @@ public final class HTMLManagerServlet extends ManagerServlet {
 
 
     /**
-     * @see javax.servlet.Servlet#getServletInfo()
+     * @see jakarta.servlet.Servlet#getServletInfo()
      */
     @Override
     public String getServletInfo() {
-        return "HTMLManagerServlet, Copyright (c) 1999-2021, The Apache Software Foundation";
+        return "HTMLManagerServlet, Copyright (c) 1999-2020, The Apache Software Foundation";
     }
 
     /**
-     * @see javax.servlet.GenericServlet#init()
+     * @see jakarta.servlet.GenericServlet#init()
      */
     @Override
     public void init() throws ServletException {
@@ -956,7 +956,7 @@ public final class HTMLManagerServlet extends ManagerServlet {
                     orderBy = "DESC";
                 }
                 try {
-                    sessions.sort(comparator);
+                    Collections.sort(sessions, comparator);
                 } catch (IllegalStateException ise) {
                     // at least 1 of the sessions is invalidated
                     req.setAttribute(APPLICATION_ERROR, "Can't sort session list: one session is invalidated");

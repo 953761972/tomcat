@@ -22,12 +22,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.servlet.ReadListener;
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletException;
-import javax.servlet.SessionTrackingMode;
-import javax.servlet.WriteListener;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ReadListener;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.SessionTrackingMode;
+import jakarta.servlet.WriteListener;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.Authenticator;
 import org.apache.catalina.Context;
@@ -67,7 +67,7 @@ public class CoyoteAdapter implements Adapter {
 
     // -------------------------------------------------------------- Constants
 
-    private static final String POWERED_BY = "Servlet/4.0 JSP/2.3 " +
+    private static final String POWERED_BY = "Servlet/5.0 JSP/3.0 " +
             "(" + ServerInfo.getServerInfo() + " Java/" +
             System.getProperty("java.vm.vendor") + "/" +
             System.getProperty("java.runtime.version") + ")";
@@ -78,12 +78,15 @@ public class CoyoteAdapter implements Adapter {
     public static final int ADAPTER_NOTES = 1;
 
 
-    protected static final boolean ALLOW_BACKSLASH =
-        Boolean.parseBoolean(System.getProperty("org.apache.catalina.connector.CoyoteAdapter.ALLOW_BACKSLASH", "false"));
-
-
     private static final ThreadLocal<String> THREAD_NAME =
-            ThreadLocal.withInitial(() -> Thread.currentThread().getName());
+            new ThreadLocal<String>() {
+
+                @Override
+                protected String initialValue() {
+                    return Thread.currentThread().getName();
+                }
+
+    };
 
     // ----------------------------------------------------------- Constructors
 
@@ -152,20 +155,21 @@ public class CoyoteAdapter implements Adapter {
                 // trigger a close
                 success = false;
                 Throwable t = (Throwable)req.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
-                Context context = request.getContext();
+                req.getAttributes().remove(RequestDispatcher.ERROR_EXCEPTION);
                 ClassLoader oldCL = null;
                 try {
-                    oldCL = context.bind(false, null);
+                    oldCL = request.getContext().bind(false, null);
                     if (req.getReadListener() != null) {
                         req.getReadListener().onError(t);
                     }
                     if (res.getWriteListener() != null) {
                         res.getWriteListener().onError(t);
                     }
-                    res.action(ActionCode.CLOSE_NOW, t);
-                    asyncConImpl.setErrorState(t, true);
                 } finally {
-                    context.unbind(false, oldCL);
+                    request.getContext().unbind(false, oldCL);
+                }
+                if (t != null) {
+                    asyncConImpl.setErrorState(t, true);
                 }
             }
 
@@ -174,64 +178,42 @@ public class CoyoteAdapter implements Adapter {
                 WriteListener writeListener = res.getWriteListener();
                 ReadListener readListener = req.getReadListener();
                 if (writeListener != null && status == SocketEvent.OPEN_WRITE) {
-                    Context context = request.getContext();
                     ClassLoader oldCL = null;
                     try {
-                        oldCL = context.bind(false, null);
+                        oldCL = request.getContext().bind(false, null);
                         res.onWritePossible();
                         if (request.isFinished() && req.sendAllDataReadEvent() &&
                                 readListener != null) {
                             readListener.onAllDataRead();
                         }
-                        // User code may have swallowed an IOException
-                        if (response.getCoyoteResponse().isExceptionPresent()) {
-                            throw response.getCoyoteResponse().getErrorException();
-                        }
                     } catch (Throwable t) {
                         ExceptionUtils.handleThrowable(t);
-                        // Need to trigger the call to AbstractProcessor.setErrorState()
-                        // before the listener is called so the listener can call complete
-                        // Therefore no need to set success=false as that would trigger a
-                        // second call to AbstractProcessor.setErrorState()
-                        // https://bz.apache.org/bugzilla/show_bug.cgi?id=65001
                         writeListener.onError(t);
-                        res.action(ActionCode.CLOSE_NOW, t);
-                        asyncConImpl.setErrorState(t, true);
+                        success = false;
                     } finally {
-                        context.unbind(false, oldCL);
+                        request.getContext().unbind(false, oldCL);
                     }
                 } else if (readListener != null && status == SocketEvent.OPEN_READ) {
-                    Context context = request.getContext();
                     ClassLoader oldCL = null;
                     try {
-                        oldCL = context.bind(false, null);
+                        oldCL = request.getContext().bind(false, null);
                         // If data is being read on a non-container thread a
                         // dispatch with status OPEN_READ will be used to get
                         // execution back on a container thread for the
                         // onAllDataRead() event. Therefore, make sure
                         // onDataAvailable() is not called in this case.
                         if (!request.isFinished()) {
-                            req.onDataAvailable();
+                            readListener.onDataAvailable();
                         }
                         if (request.isFinished() && req.sendAllDataReadEvent()) {
                             readListener.onAllDataRead();
                         }
-                        // User code may have swallowed an IOException
-                        if (request.getCoyoteRequest().isExceptionPresent()) {
-                            throw request.getCoyoteRequest().getErrorException();
-                        }
                     } catch (Throwable t) {
                         ExceptionUtils.handleThrowable(t);
-                        // Need to trigger the call to AbstractProcessor.setErrorState()
-                        // before the listener is called so the listener can call complete
-                        // Therefore no need to set success=false as that would trigger a
-                        // second call to AbstractProcessor.setErrorState()
-                        // https://bz.apache.org/bugzilla/show_bug.cgi?id=65001
                         readListener.onError(t);
-                        res.action(ActionCode.CLOSE_NOW, t);
-                        asyncConImpl.setErrorState(t, true);
+                        success = false;
                     } finally {
-                        context.unbind(false, oldCL);
+                        request.getContext().unbind(false, oldCL);
                     }
                 }
             }
@@ -287,8 +269,8 @@ public class CoyoteAdapter implements Adapter {
             // Access logging
             if (!success || !request.isAsync()) {
                 long time = 0;
-                if (req.getStartTime() != -1) {
-                    time = System.currentTimeMillis() - req.getStartTime();
+                if (req.getStartTimeNanos() != -1) {
+                    time = System.nanoTime() - req.getStartTimeNanos();
                 }
                 Context context = request.getContext();
                 if (context != null) {
@@ -416,7 +398,7 @@ public class CoyoteAdapter implements Adapter {
                 // The other possibility is that an error occurred early in
                 // processing and the request could not be mapped to a Context.
                 // Log via the host or engine in that case.
-                long time = System.currentTimeMillis() - req.getStartTime();
+                long time = System.nanoTime() - req.getStartTimeNanos();
                 if (context != null) {
                     context.logAccess(request, response, time, false);
                 } else if (response.isError()) {
@@ -649,16 +631,12 @@ public class CoyoteAdapter implements Adapter {
                 response.sendError(400, "Invalid URI: " + ioe.getMessage());
             }
             // Normalization
-            if (normalize(req.decodedURI())) {
+            if (normalize(req.decodedURI(), connector.getAllowBackslash())) {
                 // Character decoding
                 convertURI(decodedURI, request);
-                // Check that the URI is still normalized
-                // Note: checkNormalize is deprecated because the test is no
-                //       longer required in Tomcat 10 onwards and has been
-                //       removed
-                if (!checkNormalize(req.decodedURI())) {
-                    response.sendError(400, "Invalid URI");
-                }
+                // URIEncoding values are limited to US-ASCII supersets.
+                // Therefore it is not necessary to check that the URI remains
+                // normalized after character decoding
             } else {
                 response.sendError(400, "Invalid URI");
             }
@@ -1145,12 +1123,13 @@ public class CoyoteAdapter implements Adapter {
      * This method normalizes "\", "//", "/./" and "/../".
      *
      * @param uriMB URI to be normalized
+     * @param allowBackslash <code>true</code> if backslash characters are allowed in URLs
      *
      * @return <code>false</code> if normalizing this URI would require going
      *         above the root, or if the URI contains a null byte, otherwise
      *         <code>true</code>
      */
-    public static boolean normalize(MessageBytes uriMB) {
+    public static boolean normalize(MessageBytes uriMB, boolean allowBackslash) {
 
         ByteChunk uriBC = uriMB.getByteChunk();
         final byte[] b = uriBC.getBytes();
@@ -1165,24 +1144,24 @@ public class CoyoteAdapter implements Adapter {
         int pos = 0;
         int index = 0;
 
-
-        // The URL must start with '/' (or '\' that will be replaced soon)
-        if (b[start] != (byte) '/' && b[start] != (byte) '\\') {
-            return false;
-        }
-
         // Replace '\' with '/'
         // Check for null byte
         for (pos = start; pos < end; pos++) {
             if (b[pos] == (byte) '\\') {
-                if (ALLOW_BACKSLASH) {
+                if (allowBackslash) {
                     b[pos] = (byte) '/';
                 } else {
                     return false;
                 }
-            } else if (b[pos] == (byte) 0) {
+            }
+            if (b[pos] == (byte) 0) {
                 return false;
             }
+        }
+
+        // The URL must start with '/'
+        if (b[start] != (byte) '/') {
+            return false;
         }
 
         // Replace "//" with "/"
@@ -1251,74 +1230,6 @@ public class CoyoteAdapter implements Adapter {
         return true;
 
     }
-
-
-    /**
-     * Check that the URI is normalized following character decoding. This
-     * method checks for "\", 0, "//", "/./" and "/../".
-     *
-     * @param uriMB URI to be checked (should be chars)
-     *
-     * @return <code>false</code> if sequences that are supposed to be
-     *         normalized are still present in the URI, otherwise
-     *         <code>true</code>
-     *
-     * @deprecated This code will be removed in Apache Tomcat 10 onwards
-     */
-    @Deprecated
-    public static boolean checkNormalize(MessageBytes uriMB) {
-
-        CharChunk uriCC = uriMB.getCharChunk();
-        char[] c = uriCC.getChars();
-        int start = uriCC.getStart();
-        int end = uriCC.getEnd();
-
-        int pos = 0;
-
-        // Check for '\' and 0
-        for (pos = start; pos < end; pos++) {
-            if (c[pos] == '\\') {
-                return false;
-            }
-            if (c[pos] == 0) {
-                return false;
-            }
-        }
-
-        // Check for "//"
-        for (pos = start; pos < (end - 1); pos++) {
-            if (c[pos] == '/') {
-                if (c[pos + 1] == '/') {
-                    return false;
-                }
-            }
-        }
-
-        // Check for ending with "/." or "/.."
-        if (((end - start) >= 2) && (c[end - 1] == '.')) {
-            if ((c[end - 2] == '/')
-                    || ((c[end - 2] == '.')
-                    && (c[end - 3] == '/'))) {
-                return false;
-            }
-        }
-
-        // Check for "/./"
-        if (uriCC.indexOf("/./", 0, 3, 0) >= 0) {
-            return false;
-        }
-
-        // Check for "/../"
-        if (uriCC.indexOf("/../", 0, 4, 0) >= 0) {
-            return false;
-        }
-
-        return true;
-
-    }
-
-
-    // ------------------------------------------------------ Protected Methods
 
 
     /**

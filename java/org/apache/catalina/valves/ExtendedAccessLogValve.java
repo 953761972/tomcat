@@ -30,8 +30,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpSession;
 
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
@@ -207,7 +207,12 @@ public class ExtendedAccessLogValve extends AccessLogValve {
         private static final long INTERVAL = (1000 * 60 * 60 * 24);
 
         private static final ThreadLocal<ElementTimestampStruct> currentDate =
-                ThreadLocal.withInitial(() -> new ElementTimestampStruct("yyyy-MM-dd"));
+                new ThreadLocal<ElementTimestampStruct>() {
+            @Override
+            protected ElementTimestampStruct initialValue() {
+                return new ElementTimestampStruct("yyyy-MM-dd");
+            }
+        };
 
         @Override
         public void addElement(CharArrayWriter buf, Date date, Request request,
@@ -230,7 +235,12 @@ public class ExtendedAccessLogValve extends AccessLogValve {
         private static final long INTERVAL = 1000;
 
         private static final ThreadLocal<ElementTimestampStruct> currentTime =
-                ThreadLocal.withInitial(() -> new ElementTimestampStruct("HH:mm:ss"));
+                new ThreadLocal<ElementTimestampStruct>() {
+            @Override
+            protected ElementTimestampStruct initialValue() {
+                return new ElementTimestampStruct("HH:mm:ss");
+            }
+        };
 
         @Override
         public void addElement(CharArrayWriter buf, Date date, Request request,
@@ -574,7 +584,7 @@ public class ExtendedAccessLogValve extends AccessLogValve {
             if (tokenizer.hasSubToken()) {
                 String nextToken = tokenizer.getToken();
                 if ("taken".equals(nextToken)) {
-                    return new ElapsedTimeElement(false);
+                    return new ElapsedTimeElement(false, false);
                 }
             } else {
                 return new TimeElement();

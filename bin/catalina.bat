@@ -98,11 +98,6 @@ rem   CATALINA_LOGGING_CONFIG (Optional) Override Tomcat's logging config file
 rem                   Example (all one line)
 rem                   set CATALINA_LOGGING_CONFIG="-Djava.util.logging.config.file=%CATALINA_BASE%\conf\logging.properties"
 rem
-rem   LOGGING_CONFIG  Deprecated
-rem                   Use CATALINA_LOGGING_CONFIG
-rem                   This is only used if CATALINA_LOGGING_CONFIG is not set
-rem                   and LOGGING_CONFIG starts with "-D..."
-rem
 rem   LOGGING_MANAGER (Optional) Override Tomcat's logging manager
 rem                   Example (all one line)
 rem                   set LOGGING_MANAGER="-Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager"
@@ -219,13 +214,6 @@ rem Register custom URL handlers
 rem Do this here so custom URL handles (specifically 'war:...') can be used in the security policy
 set "JAVA_OPTS=%JAVA_OPTS% -Djava.protocol.handler.pkgs=org.apache.catalina.webresources"
 
-rem Check for the deprecated LOGGING_CONFIG
-rem Only use it if CATALINA_LOGGING_CONFIG is not set and LOGGING_CONFIG starts with "-D..."
-if not "%LOGGING_CONFIG:~0,2%"=="-D" goto noLoggingDeprecation
-if not "%CATALINA_LOGGING_CONFIG%" == "" goto noLoggingDeprecation
-set "CATALINA_LOGGING_CONFIG=%LOGGING_CONFIG%"
-:noLoggingDeprecation
-
 if not "%CATALINA_LOGGING_CONFIG%" == "" goto noJuliConfig
 set CATALINA_LOGGING_CONFIG=-Dnop
 if not exist "%CATALINA_BASE%\conf\logging.properties" goto noJuliConfig
@@ -239,8 +227,6 @@ set LOGGING_MANAGER=-Djava.util.logging.manager=org.apache.juli.ClassLoaderLogMa
 rem Configure JAVA 9 specific start-up parameters
 set "JDK_JAVA_OPTIONS=%JDK_JAVA_OPTIONS% --add-opens=java.base/java.lang=ALL-UNNAMED"
 set "JDK_JAVA_OPTIONS=%JDK_JAVA_OPTIONS% --add-opens=java.base/java.io=ALL-UNNAMED"
-set "JDK_JAVA_OPTIONS=%JDK_JAVA_OPTIONS% --add-opens=java.base/java.util=ALL-UNNAMED"
-set "JDK_JAVA_OPTIONS=%JDK_JAVA_OPTIONS% --add-opens=java.base/java.util.concurrent=ALL-UNNAMED"
 set "JDK_JAVA_OPTIONS=%JDK_JAVA_OPTIONS% --add-opens=java.rmi/sun.rmi.transport=ALL-UNNAMED"
 
 rem Java 9 no longer supports the java.endorsed.dirs
@@ -268,7 +254,6 @@ goto java_dir_displayed
 echo Using JAVA_HOME:       "%JAVA_HOME%"
 :java_dir_displayed
 echo Using CLASSPATH:       "%CLASSPATH%"
-echo Using CATALINA_OPTS:   "%CATALINA_OPTS%"
 
 set _EXECJAVA=%_RUNJAVA%
 set MAINCLASS=org.apache.catalina.startup.Bootstrap

@@ -32,7 +32,7 @@ import javax.management.MBeanFeatureInfo;
  * @author Craig R. McClanahan
  */
 public class FeatureInfo implements Serializable {
-    private static final long serialVersionUID = -911529176124712296L;
+    static final long serialVersionUID = -911529176124712296L;
 
     protected String description = null;
     protected String name = null;

@@ -80,7 +80,9 @@ public class PoolableCallableStatement extends DelegatingCallableStatement {
         if (!isClosed()) {
             try {
                 pool.returnObject(key, this);
-            } catch (final SQLException | RuntimeException e) {
+            } catch (final SQLException e) {
+                throw e;
+            } catch (final RuntimeException e) {
                 throw e;
             } catch (final Exception e) {
                 throw new SQLException("Cannot close CallableStatement (return to pool failed)", e);
@@ -121,12 +123,12 @@ public class PoolableCallableStatement extends DelegatingCallableStatement {
         final List<AbandonedTrace> resultSetList = getTrace();
         if (resultSetList != null) {
             final List<Exception> thrownList = new ArrayList<>();
-            final ResultSet[] resultSets = resultSetList.toArray(Utils.EMPTY_RESULT_SET_ARRAY);
+            final ResultSet[] resultSets = resultSetList.toArray(new ResultSet[0]);
             for (final ResultSet resultSet : resultSets) {
                 if (resultSet != null) {
                     try {
                         resultSet.close();
-                    } catch (final Exception e) {
+                    } catch (Exception e) {
                         thrownList.add(e);
                     }
                 }

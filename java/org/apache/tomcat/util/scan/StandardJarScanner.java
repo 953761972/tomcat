@@ -31,7 +31,7 @@ import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 
-import javax.servlet.ServletContext;
+import jakarta.servlet.ServletContext;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -412,7 +412,9 @@ public class StandardJarScanner implements JarScanner {
             } catch (Throwable t) {
                 ExceptionUtils.handleThrowable(t);
                 // Wrap the exception and re-throw
-                throw new IOException(t);
+                IOException ioe = new IOException();
+                ioe.initCause(t);
+                throw ioe;
             }
         }
     }

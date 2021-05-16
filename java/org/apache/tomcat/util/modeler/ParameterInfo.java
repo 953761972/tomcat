@@ -29,7 +29,7 @@ import javax.management.MBeanParameterInfo;
  * @author Craig R. McClanahan
  */
 public class ParameterInfo extends FeatureInfo {
-    private static final long serialVersionUID = 2222796006787664020L;
+    static final long serialVersionUID = 2222796006787664020L;
     // ----------------------------------------------------------- Constructors
 
 

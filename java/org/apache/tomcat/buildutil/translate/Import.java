@@ -43,8 +43,12 @@ public class Import {
     private static void processFile(File f) throws IOException {
         String language = Utils.getLanguage(f.getName());
 
-        // Unlike the master branch, don't skip the original so we can import
-        // updates to the English translations
+        // Skip the original
+        if (language.length() == 0) {
+            // Comment this line out if the originals needs to be exported.
+            return;
+        }
+
         Properties props = Utils.load(f);
         Object[] objKeys = props.keySet().toArray();
         Arrays.sort(objKeys);
@@ -95,7 +99,7 @@ public class Import {
 
         public CompositeKey(String in) {
             int posPkg = in.indexOf(Constants.END_PACKAGE_MARKER);
-            pkg = in.substring(0, posPkg);
+            pkg = in.substring(0, posPkg).replace(Constants.JAVA_EE_SUBSTRING, Constants.JAKARTA_EE_SUBSTRING);
             key = in.substring(posPkg + Constants.END_PACKAGE_MARKER.length());
             int posGroup = key.indexOf('.');
             if (posGroup == -1) {

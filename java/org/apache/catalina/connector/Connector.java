@@ -29,7 +29,6 @@ import org.apache.catalina.Globals;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleState;
 import org.apache.catalina.Service;
-import org.apache.catalina.core.AprLifecycleListener;
 import org.apache.catalina.core.AprStatus;
 import org.apache.catalina.util.LifecycleMBeanBase;
 import org.apache.coyote.AbstractProtocol;
@@ -43,7 +42,6 @@ import org.apache.tomcat.util.IntrospectionUtils;
 import org.apache.tomcat.util.buf.B2CConverter;
 import org.apache.tomcat.util.buf.CharsetUtil;
 import org.apache.tomcat.util.buf.EncodedSolidusHandling;
-import org.apache.tomcat.util.buf.UDecoder;
 import org.apache.tomcat.util.net.SSLHostConfig;
 import org.apache.tomcat.util.net.openssl.OpenSSLImplementation;
 import org.apache.tomcat.util.res.StringManager;
@@ -60,17 +58,11 @@ public class Connector extends LifecycleMBeanBase  {
     private static final Log log = LogFactory.getLog(Connector.class);
 
 
-    /**
-     * Alternate flag to enable recycling of facades.
-     */
-    public static final boolean RECYCLE_FACADES =
-        Boolean.parseBoolean(System.getProperty("org.apache.catalina.connector.RECYCLE_FACADES", "false"));
-
-
     public static final String INTERNAL_EXECUTOR_NAME = "Internal";
 
 
     // ------------------------------------------------------------ Constructor
+
 
     /**
      * Defaults to using HTTP/1.1 NIO implementation.
@@ -81,11 +73,10 @@ public class Connector extends LifecycleMBeanBase  {
 
 
     public Connector(String protocol) {
-        boolean apr = AprStatus.getUseAprConnector() && AprStatus.isInstanceCreated()
-                && AprLifecycleListener.isAprAvailable();
+        configuredProtocol = protocol;
         ProtocolHandler p = null;
         try {
-            p = ProtocolHandler.create(protocol, apr);
+            p = ProtocolHandler.create(protocol);
         } catch (Exception e) {
             log.error(sm.getString(
                     "coyoteConnector.protocolHandlerInstantiationFailed"), e);
@@ -104,18 +95,27 @@ public class Connector extends LifecycleMBeanBase  {
 
     public Connector(ProtocolHandler protocolHandler) {
         protocolHandlerClassName = protocolHandler.getClass().getName();
+        configuredProtocol = protocolHandlerClassName;
         this.protocolHandler = protocolHandler;
         // Default for Connector depends on this system property
         setThrowOnFailure(Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE"));
     }
 
-
     // ----------------------------------------------------- Instance Variables
+
 
     /**
      * The <code>Service</code> we are associated with (if any).
      */
     protected Service service = null;
+
+
+    /**
+     * If this is <code>true</code> the '\' character will be permitted as a
+     * path delimiter. If not specified, the default value of
+     * <code>false</code> will be used.
+     */
+    protected boolean allowBackslash = false;
 
 
     /**
@@ -134,6 +134,20 @@ public class Connector extends LifecycleMBeanBase  {
      * The "enable DNS lookups" flag for this Connector.
      */
     protected boolean enableLookups = false;
+
+
+    /**
+     * If this is <code>true</code> then a call to
+     * <code>Response.getWriter()</code> if no character encoding
+     * has been specified will result in subsequent calls to
+     * <code>Response.getCharacterEncoding()</code> returning
+     * <code>ISO-8859-1</code> and the <code>Content-Type</code> response header
+     * will include a <code>charset=ISO-8859-1</code> component.
+     * (SRV.15.2.22.1)
+     * If not specified, the default specification compliant value of
+     * <code>true</code> will be used.
+     */
+    protected boolean enforceEncodingInGetWriter = true;
 
 
     /**
@@ -167,7 +181,7 @@ public class Connector extends LifecycleMBeanBase  {
      * manager is enabled, this setting is ignored and object facades are
      * always discarded.
      */
-    protected boolean discardFacades = RECYCLE_FACADES;
+    protected boolean discardFacades = true;
 
 
     /**
@@ -248,6 +262,12 @@ public class Connector extends LifecycleMBeanBase  {
 
 
     /**
+     * Name of the protocol that was configured.
+     */
+    protected final String configuredProtocol;
+
+
+    /**
      * Coyote protocol handler.
      */
     protected final ProtocolHandler protocolHandler;
@@ -268,9 +288,7 @@ public class Connector extends LifecycleMBeanBase  {
     /**
      * The behavior when an encoded solidus (slash) is submitted.
      */
-    @SuppressWarnings("deprecation")
-    private EncodedSolidusHandling encodedSolidusHandling =
-            UDecoder.ALLOW_ENCODED_SLASH ? EncodedSolidusHandling.DECODE : EncodedSolidusHandling.REJECT;
+    private EncodedSolidusHandling encodedSolidusHandling = EncodedSolidusHandling.REJECT;
 
 
     /**
@@ -311,36 +329,6 @@ public class Connector extends LifecycleMBeanBase  {
 
 
     /**
-     * Return a property from the protocol handler.
-     *
-     * @param name the property name
-     * @return the property value
-     *
-     * @deprecated Use {@link #getProperty(String)}. This will be removed in
-     *             Tomcat 10 onwards.
-     */
-    @Deprecated
-    public Object getAttribute(String name) {
-        return getProperty(name);
-    }
-
-
-    /**
-     * Set a property on the protocol handler.
-     *
-     * @param name the property name
-     * @param value the property value
-     *
-     * @deprecated Use {@link #setProperty(String, String)}. This will be
-     *             removed in Tomcat 10 onwards.
-     */
-    @Deprecated
-    public void setAttribute(String name, Object value) {
-        setProperty(name, String.valueOf(value));
-    }
-
-
-    /**
      * @return the <code>Service</code> with which we are associated (if any).
      */
     public Service getService() {
@@ -355,6 +343,24 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setService(Service service) {
         this.service = service;
+    }
+
+
+    /**
+     * @return <code>true</code> if backslash characters are allowed in URLs.
+     *   Default value is <code>false</code>.
+     */
+    public boolean getAllowBackslash() {
+        return allowBackslash;
+    }
+
+
+    /**
+     * Set the allowBackslash flag.
+     * @param allowBackslash the new flag value
+     */
+    public void setAllowBackslash(boolean allowBackslash) {
+        this.allowBackslash = allowBackslash;
     }
 
 
@@ -374,7 +380,6 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setAllowTrace(boolean allowTrace) {
         this.allowTrace = allowTrace;
-        setProperty("allowTrace", String.valueOf(allowTrace));
     }
 
 
@@ -431,7 +436,24 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setEnableLookups(boolean enableLookups) {
         this.enableLookups = enableLookups;
-        setProperty("enableLookups", String.valueOf(enableLookups));
+    }
+
+
+    /**
+     * @return <code>true</code> if a default character encoding will be set
+     *   when calling Response.getWriter()
+     */
+    public boolean getEnforceEncodingInGetWriter() {
+        return enforceEncodingInGetWriter;
+    }
+
+
+    /**
+     * Set the enforceEncodingInGetWriter flag.
+     * @param enforceEncodingInGetWriter the new flag value
+     */
+    public void setEnforceEncodingInGetWriter(boolean enforceEncodingInGetWriter) {
+        this.enforceEncodingInGetWriter = enforceEncodingInGetWriter;
     }
 
 
@@ -464,7 +486,6 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setMaxParameterCount(int maxParameterCount) {
         this.maxParameterCount = maxParameterCount;
-        setProperty("maxParameterCount", String.valueOf(maxParameterCount));
     }
 
 
@@ -486,7 +507,6 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setMaxPostSize(int maxPostSize) {
         this.maxPostSize = maxPostSize;
-        setProperty("maxPostSize", String.valueOf(maxPostSize));
     }
 
 
@@ -540,7 +560,6 @@ public class Connector extends LifecycleMBeanBase  {
 
         this.parseBodyMethods = methods;
         this.parseBodyMethodsSet = methodSet;
-        setProperty("parseBodyMethods", methods);
     }
 
 
@@ -625,15 +644,7 @@ public class Connector extends LifecycleMBeanBase  {
      * @return the Coyote protocol handler in use.
      */
     public String getProtocol() {
-        boolean apr = AprStatus.getUseAprConnector();
-        if ((!apr && org.apache.coyote.http11.Http11NioProtocol.class.getName().equals(protocolHandlerClassName))
-                || (apr && org.apache.coyote.http11.Http11AprProtocol.class.getName().equals(protocolHandlerClassName))) {
-            return "HTTP/1.1";
-        } else if ((!apr && org.apache.coyote.ajp.AjpNioProtocol.class.getName().equals(protocolHandlerClassName))
-                || (apr && org.apache.coyote.ajp.AjpAprProtocol.class.getName().equals(protocolHandlerClassName))) {
-            return "AJP/1.3";
-        }
-        return protocolHandlerClassName;
+        return configuredProtocol;
     }
 
 
@@ -673,7 +684,6 @@ public class Connector extends LifecycleMBeanBase  {
         } else {
             this.proxyName = null;
         }
-        setProperty("proxyName", this.proxyName);
     }
 
 
@@ -692,7 +702,6 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setProxyPort(int proxyPort) {
         this.proxyPort = proxyPort;
-        setProperty("proxyPort", String.valueOf(proxyPort));
     }
 
 
@@ -713,7 +722,6 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setRedirectPort(int redirectPort) {
         this.redirectPort = redirectPort;
-        setProperty("redirectPort", String.valueOf(redirectPort));
     }
 
 
@@ -790,7 +798,8 @@ public class Connector extends LifecycleMBeanBase  {
         try {
              Charset charset = B2CConverter.getCharset(URIEncoding);
              if (!CharsetUtil.isAsciiSuperset(charset)) {
-                 log.error(sm.getString("coyoteConnector.notAsciiSuperset", URIEncoding));
+                 log.error(sm.getString("coyoteConnector.notAsciiSuperset", URIEncoding, uriCharset.name()));
+                 return;
              }
              uriCharset = charset;
         } catch (UnsupportedEncodingException e) {
@@ -814,7 +823,6 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setUseBodyEncodingForURI(boolean useBodyEncodingForURI) {
         this.useBodyEncodingForURI = useBodyEncodingForURI;
-        setProperty("useBodyEncodingForURI", String.valueOf(useBodyEncodingForURI));
     }
 
     /**
@@ -839,7 +847,6 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setXpoweredBy(boolean xpoweredBy) {
         this.xpoweredBy = xpoweredBy;
-        setProperty("xpoweredBy", String.valueOf(xpoweredBy));
     }
 
 
@@ -851,7 +858,6 @@ public class Connector extends LifecycleMBeanBase  {
      */
     public void setUseIPVHosts(boolean useIPVHosts) {
         this.useIPVHosts = useIPVHosts;
-        setProperty("useIPVHosts", String.valueOf(useIPVHosts));
     }
 
 
@@ -944,30 +950,23 @@ public class Connector extends LifecycleMBeanBase  {
 
         StringBuilder sb = new StringBuilder("type=");
         sb.append(type);
-        String id = (protocolHandler != null) ? protocolHandler.getId() : null;
-        if (id != null) {
-            // Maintain MBean name compatibility, even if not accurate
-            sb.append(",port=0,address=");
-            sb.append(ObjectName.quote(id));
+        sb.append(",port=");
+        int port = getPortWithOffset();
+        if (port > 0) {
+            sb.append(port);
         } else {
-            sb.append(",port=");
-            int port = getPortWithOffset();
-            if (port > 0) {
-                sb.append(port);
-            } else {
-                sb.append("auto-");
-                sb.append(getProperty("nameIndex"));
-            }
-            String address = "";
-            if (addressObj instanceof InetAddress) {
-                address = ((InetAddress) addressObj).getHostAddress();
-            } else if (addressObj != null) {
-                address = addressObj.toString();
-            }
-            if (address.length() > 0) {
-                sb.append(",address=");
-                sb.append(ObjectName.quote(address));
-            }
+            sb.append("auto-");
+            sb.append(getProperty("nameIndex"));
+        }
+        String address = "";
+        if (addressObj instanceof InetAddress) {
+            address = ((InetAddress) addressObj).getHostAddress();
+        } else if (addressObj != null) {
+            address = addressObj.toString();
+        }
+        if (address.length() > 0) {
+            sb.append(",address=");
+            sb.append(ObjectName.quote(address));
         }
         return sb.toString();
     }
@@ -1060,8 +1059,7 @@ public class Connector extends LifecycleMBeanBase  {
     protected void startInternal() throws LifecycleException {
 
         // Validate settings before starting
-        String id = (protocolHandler != null) ? protocolHandler.getId() : null;
-        if (id == null && getPortWithOffset() < 0) {
+        if (getPortWithOffset() < 0) {
             throw new LifecycleException(sm.getString(
                     "coyoteConnector.invalidPort", Integer.valueOf(getPortWithOffset())));
         }
@@ -1127,17 +1125,12 @@ public class Connector extends LifecycleMBeanBase  {
         StringBuilder sb = new StringBuilder("Connector[");
         sb.append(getProtocol());
         sb.append('-');
-        String id = (protocolHandler != null) ? protocolHandler.getId() : null;
-        if (id != null) {
-            sb.append(id);
+        int port = getPortWithOffset();
+        if (port > 0) {
+            sb.append(port);
         } else {
-            int port = getPortWithOffset();
-            if (port > 0) {
-                sb.append(port);
-            } else {
-                sb.append("auto-");
-                sb.append(getProperty("nameIndex"));
-            }
+            sb.append("auto-");
+            sb.append(getProperty("nameIndex"));
         }
         sb.append(']');
         return sb.toString();

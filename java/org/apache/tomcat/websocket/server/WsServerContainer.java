@@ -25,21 +25,20 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-import javax.naming.NamingException;
-import javax.servlet.DispatcherType;
-import javax.servlet.FilterRegistration;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.websocket.CloseReason;
-import javax.websocket.CloseReason.CloseCodes;
-import javax.websocket.DeploymentException;
-import javax.websocket.Encoder;
-import javax.websocket.server.ServerContainer;
-import javax.websocket.server.ServerEndpoint;
-import javax.websocket.server.ServerEndpointConfig;
-import javax.websocket.server.ServerEndpointConfig.Configurator;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.FilterRegistration;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.websocket.CloseReason;
+import jakarta.websocket.CloseReason.CloseCodes;
+import jakarta.websocket.DeploymentException;
+import jakarta.websocket.Encoder;
+import jakarta.websocket.server.ServerContainer;
+import jakarta.websocket.server.ServerEndpoint;
+import jakarta.websocket.server.ServerEndpointConfig;
+import jakarta.websocket.server.ServerEndpointConfig.Configurator;
 
 import org.apache.tomcat.InstanceManager;
 import org.apache.tomcat.util.res.StringManager;
@@ -152,7 +151,7 @@ public class WsServerContainer extends WsWebSocketContainer
 
             // Add method mapping to user properties
             PojoMethodMapping methodMapping = new PojoMethodMapping(sec.getEndpointClass(),
-                    sec.getDecoders(), path, getInstanceManager(Thread.currentThread().getContextClassLoader()));
+                    sec.getDecoders(), path);
             if (methodMapping.getOnClose() != null || methodMapping.getOnOpen() != null
                     || methodMapping.getOnError() != null || methodMapping.hasMessageHandlers()) {
                 sec.getUserProperties().put(org.apache.tomcat.websocket.pojo.Constants.POJO_METHOD_MAPPING_KEY,
@@ -249,7 +248,7 @@ public class WsServerContainer extends WsWebSocketContainer
             String path = annotation.value();
 
             // Validate encoders
-            validateEncoders(annotation.encoders(), getInstanceManager(Thread.currentThread().getContextClassLoader()));
+            validateEncoders(annotation.encoders());
 
             // ServerEndpointConfig
             Class<? extends Configurator> configuratorClazz =
@@ -430,7 +429,7 @@ public class WsServerContainer extends WsWebSocketContainer
         Set<WsSession> wsSessions = authenticatedSessions.get(httpSessionId);
         if (wsSessions == null) {
             wsSessions = Collections.newSetFromMap(
-                     new ConcurrentHashMap<>());
+                     new ConcurrentHashMap<WsSession,Boolean>());
              authenticatedSessions.putIfAbsent(httpSessionId, wsSessions);
              wsSessions = authenticatedSessions.get(httpSessionId);
         }
@@ -464,22 +463,17 @@ public class WsServerContainer extends WsWebSocketContainer
     }
 
 
-    private static void validateEncoders(Class<? extends Encoder>[] encoders, InstanceManager instanceManager)
+    private static void validateEncoders(Class<? extends Encoder>[] encoders)
             throws DeploymentException {
 
         for (Class<? extends Encoder> encoder : encoders) {
-            // Need to instantiate encoder to ensure it is valid and that
-            // deployment can be failed if it is not. The encoder is then
-            // discarded immediately.
+            // Need to instantiate decoder to ensure it is valid and that
+            // deployment can be failed if it is not
+            @SuppressWarnings("unused")
             Encoder instance;
             try {
-                if (instanceManager == null) {
-                    instance = encoder.getConstructor().newInstance();
-                } else {
-                    instance = (Encoder) instanceManager.newInstance(encoder);
-                    instanceManager.destroyInstance(instance);
-                }
-            } catch(ReflectiveOperationException | NamingException e) {
+                encoder.getConstructor().newInstance();
+            } catch(ReflectiveOperationException e) {
                 throw new DeploymentException(sm.getString(
                         "serverContainer.encoderFail", encoder.getName()), e);
             }

@@ -39,14 +39,12 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 
-import javax.servlet.MultipartConfigElement;
-import javax.servlet.ServletContainerInitializer;
-import javax.servlet.ServletContext;
-import javax.servlet.SessionCookieConfig;
-import javax.servlet.annotation.HandlesTypes;
+import jakarta.servlet.MultipartConfigElement;
+import jakarta.servlet.ServletContainerInitializer;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.SessionCookieConfig;
+import jakarta.servlet.annotation.HandlesTypes;
 
 import org.apache.catalina.Authenticator;
 import org.apache.catalina.Container;
@@ -123,6 +121,7 @@ import org.xml.sax.SAXParseException;
 public class ContextConfig implements LifecycleListener {
 
     private static final Log log = LogFactory.getLog(ContextConfig.class);
+
 
     /**
      * The string resources for this package.
@@ -485,7 +484,7 @@ public class ContextConfig implements LifecycleListener {
     }
 
 
-    protected static String getContextXmlPackageName(String generatedCodePackage, Container container) {
+    protected static String getContextXmlPackageName(String generatedCodePackge, Container container) {
         StringBuilder result = new StringBuilder();
         Container host = null;
         Container engine = null;
@@ -497,7 +496,7 @@ public class ContextConfig implements LifecycleListener {
             }
             container = container.getParent();
         }
-        result.append(generatedCodePackage);
+        result.append(generatedCodePackge);
         if (engine != null) {
             result.append('.');
         }
@@ -858,8 +857,7 @@ public class ContextConfig implements LifecycleListener {
         String docBaseCanonical = docBaseAbsoluteFile.getCanonicalPath();
 
         // Re-calculate now docBase is a canonical path
-        boolean docBaseCanonicalInAppBase =
-                docBaseAbsoluteFile.getCanonicalFile().toPath().startsWith(appBase.toPath());
+        boolean docBaseCanonicalInAppBase = docBaseCanonical.startsWith(appBase.getPath() + File.separatorChar);
         String docBase;
         if (docBaseCanonicalInAppBase) {
             docBase = docBaseCanonical.substring(appBase.getPath().length());
@@ -1376,14 +1374,7 @@ public class ContextConfig implements LifecycleListener {
     protected void processClasses(WebXml webXml, Set<WebXml> orderedFragments) {
         // Step 4. Process /WEB-INF/classes for annotations and
         // @HandlesTypes matches
-
-        Map<String, JavaClassCacheEntry> javaClassCache;
-
-        if (context.getParallelAnnotationScanning()) {
-            javaClassCache = new ConcurrentHashMap<>();
-        } else {
-            javaClassCache = new HashMap<>();
-        }
+        Map<String, JavaClassCacheEntry> javaClassCache = new HashMap<>();
 
         if (ok) {
             WebResource[] webResources =
@@ -1848,7 +1839,7 @@ public class ContextConfig implements LifecycleListener {
         }
 
         for (ServletContainerInitializer sci : detectedScis) {
-            initializerClassMap.put(sci, new HashSet<>());
+            initializerClassMap.put(sci, new HashSet<Class<?>>());
 
             HandlesTypes ht;
             try {
@@ -1926,9 +1917,12 @@ public class ContextConfig implements LifecycleListener {
                                 "/", resources.getAbsolutePath(), null, "/");
                     }
                 }
-            } catch (IOException | URISyntaxException e) {
+            } catch (IOException ioe) {
                 log.error(sm.getString("contextConfig.resourceJarFail", url,
                         context.getName()));
+            } catch (URISyntaxException e) {
+                log.error(sm.getString("contextConfig.resourceJarFail", url,
+                    context.getName()));
             }
         }
     }
@@ -2142,85 +2136,26 @@ public class ContextConfig implements LifecycleListener {
     }
 
     protected void processAnnotations(Set<WebXml> fragments,
-            boolean handlesTypesOnly, Map<String, JavaClassCacheEntry> javaClassCache) {
+            boolean handlesTypesOnly, Map<String,JavaClassCacheEntry> javaClassCache) {
+        for(WebXml fragment : fragments) {
+            // Only need to scan for @HandlesTypes matches if any of the
+            // following are true:
+            // - it has already been determined only @HandlesTypes is required
+            //   (e.g. main web.xml has metadata-complete="true"
+            // - this fragment is for a container JAR (Servlet 3.1 section 8.1)
+            // - this fragment has metadata-complete="true"
+            boolean htOnly = handlesTypesOnly || !fragment.getWebappJar() ||
+                    fragment.isMetadataComplete();
 
-        if (context.getParallelAnnotationScanning()) {
-            processAnnotationsInParallel(fragments, handlesTypesOnly, javaClassCache);
-        } else {
-            for (WebXml fragment : fragments) {
-                scanWebXmlFragment(handlesTypesOnly, fragment, javaClassCache);
-            }
-        }
-    }
-
-    private void scanWebXmlFragment(boolean handlesTypesOnly, WebXml fragment, Map<String, JavaClassCacheEntry> javaClassCache) {
-
-        // Only need to scan for @HandlesTypes matches if any of the
-        // following are true:
-        // - it has already been determined only @HandlesTypes is required
-        //   (e.g. main web.xml has metadata-complete="true"
-        // - this fragment is for a container JAR (Servlet 3.1 section 8.1)
-        // - this fragment has metadata-complete="true"
-        boolean htOnly = handlesTypesOnly || !fragment.getWebappJar() ||
-                fragment.isMetadataComplete();
-
-        WebXml annotations = new WebXml();
-        // no impact on distributable
-        annotations.setDistributable(true);
-        URL url = fragment.getURL();
-        processAnnotationsUrl(url, annotations, htOnly, javaClassCache);
-        Set<WebXml> set = new HashSet<>();
-        set.add(annotations);
-        // Merge annotations into fragment - fragment takes priority
-        fragment.merge(set);
-    }
-
-    /**
-     * Executable task to scan a segment for annotations. Each task does the
-     * same work as the for loop inside processAnnotations();
-     */
-    private class AnnotationScanTask implements Runnable {
-        private final WebXml fragment;
-        private final boolean handlesTypesOnly;
-        private Map<String, JavaClassCacheEntry> javaClassCache;
-
-        private AnnotationScanTask(WebXml fragment, boolean handlesTypesOnly, Map<String, JavaClassCacheEntry> javaClassCache) {
-            this.fragment = fragment;
-            this.handlesTypesOnly = handlesTypesOnly;
-            this.javaClassCache = javaClassCache;
-        }
-
-        @Override
-        public void run() {
-            scanWebXmlFragment(handlesTypesOnly, fragment, javaClassCache);
-        }
-
-    }
-
-    /**
-     * Parallelized version of processAnnotationsInParallel(). Constructs tasks,
-     * submits them as they're created, then waits for completion.
-     *
-     * @param fragments        Set of parallelizable scans
-     * @param handlesTypesOnly Important parameter for the underlying scan
-     * @param javaClassCache The class cache
-     */
-    protected void processAnnotationsInParallel(Set<WebXml> fragments, boolean handlesTypesOnly,
-                                                Map<String, JavaClassCacheEntry> javaClassCache) {
-        Server s = getServer();
-        ExecutorService pool = null;
-        pool = s.getUtilityExecutor();
-        List<Future<?>> futures = new ArrayList<>(fragments.size());
-        for (WebXml fragment : fragments) {
-            Runnable task = new AnnotationScanTask(fragment, handlesTypesOnly, javaClassCache);
-            futures.add(pool.submit(task));
-        }
-        try {
-            for (Future<?> future : futures) {
-                future.get();
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(sm.getString("contextConfig.processAnnotationsInParallelFailure"), e);
+            WebXml annotations = new WebXml();
+            // no impact on distributable
+            annotations.setDistributable(true);
+            URL url = fragment.getURL();
+            processAnnotationsUrl(url, annotations, htOnly, javaClassCache);
+            Set<WebXml> set = new HashSet<>();
+            set.add(annotations);
+            // Merge annotations into fragment - fragment takes priority
+            fragment.merge(set);
         }
     }
 
@@ -2246,7 +2181,10 @@ public class ContextConfig implements LifecycleListener {
                 webResource.getName().endsWith(".class")) {
             try (InputStream is = webResource.getInputStream()) {
                 processAnnotationsStream(is, fragment, handlesTypesOnly, javaClassCache);
-            } catch (IOException | ClassFormatException e) {
+            } catch (IOException e) {
+                log.error(sm.getString("contextConfig.inputStreamWebResource",
+                        webResource.getWebappPath()),e);
+            } catch (ClassFormatException e) {
                 log.error(sm.getString("contextConfig.inputStreamWebResource",
                         webResource.getWebappPath()),e);
             }
@@ -2291,7 +2229,10 @@ public class ContextConfig implements LifecycleListener {
                 if (entryName.endsWith(".class")) {
                     try (InputStream is = jar.getEntryInputStream()) {
                         processAnnotationsStream(is, fragment, handlesTypesOnly, javaClassCache);
-                    } catch (IOException | ClassFormatException e) {
+                    } catch (IOException e) {
+                        log.error(sm.getString("contextConfig.inputStreamJar",
+                                entryName, url),e);
+                    } catch (ClassFormatException e) {
                         log.error(sm.getString("contextConfig.inputStreamJar",
                                 entryName, url),e);
                     }
@@ -2324,7 +2265,10 @@ public class ContextConfig implements LifecycleListener {
         } else if (file.getName().endsWith(".class") && file.canRead()) {
             try (FileInputStream fis = new FileInputStream(file)) {
                 processAnnotationsStream(fis, fragment, handlesTypesOnly, javaClassCache);
-            } catch (IOException | ClassFormatException e) {
+            } catch (IOException e) {
+                log.error(sm.getString("contextConfig.inputStreamFile",
+                        file.getAbsolutePath()),e);
+            } catch (ClassFormatException e) {
                 log.error(sm.getString("contextConfig.inputStreamFile",
                         file.getAbsolutePath()),e);
             }
@@ -2354,11 +2298,11 @@ public class ContextConfig implements LifecycleListener {
             String className = clazz.getClassName();
             for (AnnotationEntry ae : annotationsEntries) {
                 String type = ae.getAnnotationType();
-                if ("Ljavax/servlet/annotation/WebServlet;".equals(type)) {
+                if ("Ljakarta/servlet/annotation/WebServlet;".equals(type)) {
                     processAnnotationWebServlet(className, ae, fragment);
-                }else if ("Ljavax/servlet/annotation/WebFilter;".equals(type)) {
+                }else if ("Ljakarta/servlet/annotation/WebFilter;".equals(type)) {
                     processAnnotationWebFilter(className, ae, fragment);
-                }else if ("Ljavax/servlet/annotation/WebListener;".equals(type)) {
+                }else if ("Ljakarta/servlet/annotation/WebListener;".equals(type)) {
                     fragment.addListener(className);
                 } else {
                     // Unknown annotation - ignore
@@ -2426,7 +2370,7 @@ public class ContextConfig implements LifecycleListener {
         }
 
         if (handlesTypesAnnotations) {
-            AnnotationEntry[] annotationEntries = javaClass.getAllAnnotationEntries();
+            AnnotationEntry[] annotationEntries = javaClass.getAnnotationEntries();
             if (annotationEntries != null) {
                 for (Map.Entry<Class<?>, Set<ServletContainerInitializer>> entry :
                         typeInitializerMap.entrySet()) {
@@ -2508,7 +2452,10 @@ public class ContextConfig implements LifecycleListener {
                 ClassParser parser = new ClassParser(is);
                 JavaClass clazz = parser.parse();
                 populateJavaClassCache(clazz.getClassName(), clazz, javaClassCache);
-            } catch (ClassFormatException | IOException e) {
+            } catch (ClassFormatException e) {
+                log.debug(sm.getString("contextConfig.invalidSciHandlesTypes",
+                        className), e);
+            } catch (IOException e) {
                 log.debug(sm.getString("contextConfig.invalidSciHandlesTypes",
                         className), e);
             }

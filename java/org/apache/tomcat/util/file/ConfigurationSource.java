@@ -26,8 +26,6 @@ import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 
-import org.apache.tomcat.util.buf.UriUtil;
-
 /**
  * Abstracts configuration file storage. Allows Tomcat embedding using the regular
  * configuration style.
@@ -42,19 +40,17 @@ public interface ConfigurationSource {
         protected final URI userDirUri = userDir.toURI();
         @Override
         public Resource getResource(String name) throws IOException {
-            if (!UriUtil.isAbsoluteURI(name)) {
-                File f = new File(name);
-                if (!f.isAbsolute()) {
-                    f = new File(userDir, name);
-                }
-                if (f.isFile()) {
-                    FileInputStream fis = new FileInputStream(f);
-                    return new Resource(fis, f.toURI());
-                }
+            File f = new File(name);
+            if (!f.isAbsolute()) {
+                f = new File(userDir, name);
+            }
+            if (f.isFile()) {
+                FileInputStream fis = new FileInputStream(f);
+                return new Resource(fis, f.toURI());
             }
             URI uri = null;
             try {
-                uri = userDirUri.resolve(name);
+                uri = getURI(name);
             } catch (IllegalArgumentException e) {
                 throw new FileNotFoundException(name);
             }
@@ -67,14 +63,12 @@ public interface ConfigurationSource {
         }
         @Override
         public URI getURI(String name) {
-            if (!UriUtil.isAbsoluteURI(name)) {
-                File f = new File(name);
-                if (!f.isAbsolute()) {
-                    f = new File(userDir, name);
-                }
-                if (f.isFile()) {
-                    return f.toURI();
-                }
+            File f = new File(name);
+            if (!f.isAbsolute()) {
+                f = new File(userDir, name);
+            }
+            if (f.isFile()) {
+                return f.toURI();
             }
             return userDirUri.resolve(name);
         }

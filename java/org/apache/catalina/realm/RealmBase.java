@@ -29,8 +29,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import javax.servlet.annotation.ServletSecurity.TransportGuarantee;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.annotation.ServletSecurity.TransportGuarantee;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
@@ -1222,28 +1222,6 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
 
 
     /**
-     * Get the principal associated with the specified user name.
-     *
-     * @param username The user name
-     * @param gssCredential the GSS credential of the principal
-     * @return the principal associated with the given user name.
-     * @deprecated This will be removed in Tomcat 10 onwards. Use
-     *             {@link #getPrincipal(GSSName, GSSCredential)} instead.
-     */
-    @Deprecated
-    protected Principal getPrincipal(String username,
-            GSSCredential gssCredential) {
-        Principal p = getPrincipal(username);
-
-        if (p instanceof GenericPrincipal) {
-            ((GenericPrincipal) p).setGssCredential(gssCredential);
-        }
-
-        return p;
-    }
-
-
-    /**
      * Get the principal associated with the specified {@link GSSName}.
      *
      * @param gssName The GSS name
@@ -1544,7 +1522,7 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
 
     private static X509UsernameRetriever createUsernameRetriever(String className)
         throws LifecycleException {
-        if(null == className || className.trim().isEmpty())
+        if(null == className || "".equals(className.trim()))
             return new X509SubjectDnRetriever();
 
         try {
@@ -1556,16 +1534,5 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
         } catch (ClassCastException e) {
             throw new LifecycleException(sm.getString("realmBase.createUsernameRetriever.ClassCastException", className), e);
         }
-    }
-
-
-    @Override
-    public String[] getRoles(Principal principal) {
-        if (principal instanceof GenericPrincipal) {
-            return ((GenericPrincipal) principal).getRoles();
-        }
-
-        String className = principal.getClass().getSimpleName();
-        throw new IllegalStateException(sm.getString("realmBase.cannotGetRoles", className));
     }
 }

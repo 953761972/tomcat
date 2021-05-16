@@ -26,23 +26,23 @@ import java.util.Set;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
-import javax.security.auth.message.AuthException;
-import javax.security.auth.message.AuthStatus;
-import javax.security.auth.message.MessageInfo;
-import javax.security.auth.message.config.AuthConfigFactory;
-import javax.security.auth.message.config.AuthConfigProvider;
-import javax.security.auth.message.config.RegistrationListener;
-import javax.security.auth.message.config.ServerAuthConfig;
-import javax.security.auth.message.config.ServerAuthContext;
-import javax.servlet.DispatcherType;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+
+import jakarta.security.auth.message.AuthException;
+import jakarta.security.auth.message.AuthStatus;
+import jakarta.security.auth.message.MessageInfo;
+import jakarta.security.auth.message.config.AuthConfigFactory;
+import jakarta.security.auth.message.config.AuthConfigProvider;
+import jakarta.security.auth.message.config.RegistrationListener;
+import jakarta.security.auth.message.config.ServerAuthConfig;
+import jakarta.security.auth.message.config.ServerAuthContext;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.Authenticator;
-import org.apache.catalina.Contained;
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
 import org.apache.catalina.Globals;
@@ -51,6 +51,7 @@ import org.apache.catalina.Realm;
 import org.apache.catalina.Session;
 import org.apache.catalina.TomcatPrincipal;
 import org.apache.catalina.Valve;
+import org.apache.catalina.authenticator.jaspic.CallbackHandlerImpl;
 import org.apache.catalina.authenticator.jaspic.MessageInfoImpl;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
@@ -219,7 +220,7 @@ public abstract class AuthenticatorBase extends ValveBase
      * default {@link org.apache.catalina.authenticator.jaspic.CallbackHandlerImpl}
      * will be used.
      */
-    protected String jaspicCallbackHandlerClass = "org.apache.catalina.authenticator.jaspic.CallbackHandlerImpl";
+    protected String jaspicCallbackHandlerClass = null;
 
     /**
      * Should the auth information (remote user and auth type) be returned as response
@@ -227,7 +228,7 @@ public abstract class AuthenticatorBase extends ValveBase
      * {@link RemoteIpFilter} mark a forwarded request with the
      * {@link Globals#REQUEST_FORWARDED_ATTRIBUTE} this authenticator can return the
      * values of {@link HttpServletRequest#getRemoteUser()} and
-     * {@link HttpServletRequest#getAuthType()} as response headers {@code remote-user}
+     * {@link HttpServletRequest#getAuthType()} as reponse headers {@code remote-user}
      * and {@code auth-type} to a reverse proxy. This is useful, e.g., for access log
      * consistency or other decisions to make.
      */
@@ -246,7 +247,6 @@ public abstract class AuthenticatorBase extends ValveBase
 
     private volatile String jaspicAppContextID = null;
     private volatile Optional<AuthConfigProvider> jaspicProvider = null;
-    private volatile CallbackHandler jaspicCallbackHandler = null;
 
 
     // ------------------------------------------------------------- Properties
@@ -773,7 +773,7 @@ public abstract class AuthenticatorBase extends ValveBase
                 new MessageInfoImpl(request.getRequest(), response.getResponse(), authMandatory);
 
         try {
-            CallbackHandler callbackHandler = getCallbackHandler();
+            CallbackHandler callbackHandler = createCallbackHandler();
             ServerAuthConfig serverAuthConfig = jaspicProvider.getServerAuthConfig(
                     "HttpServlet", jaspicAppContextID, callbackHandler);
             String authContextID = serverAuthConfig.getAuthContextID(jaspicState.messageInfo);
@@ -787,41 +787,29 @@ public abstract class AuthenticatorBase extends ValveBase
         return jaspicState;
     }
 
-
-    private CallbackHandler getCallbackHandler() {
-        CallbackHandler handler = jaspicCallbackHandler;
-        if (handler == null) {
-            handler = createCallbackHandler();
-        }
-        return handler;
-    }
-
-
     private CallbackHandler createCallbackHandler() {
         CallbackHandler callbackHandler = null;
-
-        Class<?> clazz = null;
-        try {
-            clazz = Class.forName(jaspicCallbackHandlerClass, true,
-                    Thread.currentThread().getContextClassLoader());
-        } catch (ClassNotFoundException e) {
-            // Proceed with the retry below
-        }
-
-        try {
-            if (clazz == null) {
-                clazz = Class.forName(jaspicCallbackHandlerClass);
+        if (jaspicCallbackHandlerClass == null) {
+            callbackHandler = CallbackHandlerImpl.getInstance();
+        } else {
+            Class<?> clazz = null;
+            try {
+                clazz = Class.forName(jaspicCallbackHandlerClass, true,
+                        Thread.currentThread().getContextClassLoader());
+            } catch (ClassNotFoundException e) {
+                // Proceed with the retry below
             }
-            callbackHandler = (CallbackHandler)clazz.getConstructor().newInstance();
-        } catch (ReflectiveOperationException e) {
-            throw new SecurityException(e);
+
+            try {
+                if (clazz == null) {
+                    clazz = Class.forName(jaspicCallbackHandlerClass);
+                }
+                callbackHandler = (CallbackHandler)clazz.getConstructor().newInstance();
+            } catch (ReflectiveOperationException e) {
+                throw new SecurityException(e);
+            }
         }
 
-        if (callbackHandler instanceof Contained) {
-            ((Contained) callbackHandler).setContainer(getContainer());
-        }
-
-        jaspicCallbackHandler = callbackHandler;
         return callbackHandler;
     }
 
@@ -863,7 +851,7 @@ public abstract class AuthenticatorBase extends ValveBase
 
     /**
      * Look for the X509 certificate chain in the Request under the key
-     * <code>javax.servlet.request.X509Certificate</code>. If not found, trigger
+     * <code>jakarta.servlet.request.X509Certificate</code>. If not found, trigger
      * extracting the certificate chain from the Coyote request.
      *
      * @param request
@@ -936,37 +924,16 @@ public abstract class AuthenticatorBase extends ValveBase
                 if (requirePrincipal) {
                     return false;
                 }
-            } else if (cachedAuth == false || !principal.getUserPrincipal().equals(request.getUserPrincipal())) {
+            } else if (cachedAuth == false ||
+                    !principal.getUserPrincipal().equals(request.getUserPrincipal())) {
                 // Skip registration if authentication credentials were
                 // cached and the Principal did not change.
-
-                // Check to see if any of the JASPIC properties were set
-                Boolean register = null;
-                String authType = "JASPIC";
-                @SuppressWarnings("rawtypes") // JASPIC API uses raw types
+                @SuppressWarnings("rawtypes")// JASPIC API uses raw types
                 Map map = state.messageInfo.getMap();
-
-                String registerValue = (String) map.get("javax.servlet.http.registerSession");
-                if (registerValue != null) {
-                    register = Boolean.valueOf(registerValue);
-                }
-                String authTypeValue = (String) map.get("javax.servlet.http.authType");
-                if (authTypeValue != null) {
-                    authType = authTypeValue;
-                }
-
-                /*
-                 * Need to handle three cases.
-                 * See https://bz.apache.org/bugzilla/show_bug.cgi?id=64713
-                 * 1. registerSession TRUE    always use session, always cache
-                 * 2. registerSession NOT SET config for session, config for cache
-                 * 3. registerSession FALSE   config for session, never cache
-                 */
-                if (register != null) {
-                    register(request, response, principal, authType, null, null,
-                            alwaysUseSession || register.booleanValue(), register.booleanValue());
+                if (map != null && map.containsKey("jakarta.servlet.http.registerSession")) {
+                    register(request, response, principal, "JASPIC", null, null, true, true);
                 } else {
-                    register(request, response, principal, authType, null, null);
+                    register(request, response, principal, "JASPIC", null, null);
                 }
             }
             request.setNote(Constants.REQ_JASPIC_SUBJECT_NOTE, client);
@@ -1057,7 +1024,7 @@ public abstract class AuthenticatorBase extends ValveBase
                     if (log.isDebugEnabled()) {
                         log.debug(sm.getString("authenticator.check.authorizeFail", username));
                     }
-                    authorized = new GenericPrincipal(username, null, null);
+                    authorized = new GenericPrincipal(username);
                 }
                 String authType = request.getAuthType();
                 if (authType == null || authType.length() == 0) {
@@ -1212,7 +1179,7 @@ public abstract class AuthenticatorBase extends ValveBase
         if (ssoId == null) {
             // Construct a cookie to be returned to the client
             ssoId = sessionIdGenerator.generateSessionId();
-            Cookie cookie = new Cookie(Constants.SINGLE_SIGN_ON_COOKIE, ssoId);
+            Cookie cookie = new Cookie(sso.getCookieName(), ssoId);
             cookie.setMaxAge(-1);
             cookie.setPath("/");
 
@@ -1251,7 +1218,7 @@ public abstract class AuthenticatorBase extends ValveBase
         }
 
         // Fix for Bug 10040
-        // Always associate a session with a new SSO registration.
+        // Always associate a session with a new SSO reqistration.
         // SSO entries are only removed from the SSO registry map when
         // associated sessions are destroyed; if a new SSO entry is created
         // above for this request and the user never revisits the context, the
@@ -1317,7 +1284,7 @@ public abstract class AuthenticatorBase extends ValveBase
                 ServerAuthContext serverAuthContext;
                 try {
                     ServerAuthConfig serverAuthConfig = provider.getServerAuthConfig("HttpServlet",
-                            jaspicAppContextID, getCallbackHandler());
+                            jaspicAppContextID, CallbackHandlerImpl.getInstance());
                     String authContextID = serverAuthConfig.getAuthContextID(messageInfo);
                     serverAuthContext = serverAuthConfig.getAuthContext(authContextID, null, null);
                     serverAuthContext.cleanSubject(messageInfo, client);

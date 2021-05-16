@@ -22,9 +22,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -1887,7 +1884,7 @@ public class TestHostConfigAutomaticDeployment extends TomcatBaseTest {
         // Check the Context class
         Context ctxt = (Context) host.findChild(APP_NAME.getName());
 
-        assertThat(ctxt, instanceOf(TesterContext.class));
+        Assert.assertTrue(ctxt instanceof TesterContext);
     }
 
 

@@ -17,8 +17,6 @@
 package org.apache.coyote.http2;
 
 import java.nio.ByteBuffer;
-import java.util.logging.Level;
-import java.util.logging.LogManager;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -326,62 +324,57 @@ public class TestHttp2Section_5_1 extends Http2TestBase {
 
     @Test
     public void testErrorOnWaitingStream01() throws Exception {
-        LogManager.getLogManager().getLogger("org.apache.coyote.http2").setLevel(Level.ALL);
-        try {
-            // http2Connect() - modified
-            enableHttp2(1);
-            configureAndStartWebApplication();
-            openClientConnection();
-            doHttpUpgrade();
-            sendClientPreface();
+        // http2Connect() - modified
+        enableHttp2(1);
+        configureAndStartWebApplication();
+        openClientConnection();
+        doHttpUpgrade();
+        sendClientPreface();
 
-            // validateHttp2InitialResponse() - modified
+        // validateHttp2InitialResponse() - modified
+        parser.readFrame(true);
+        parser.readFrame(true);
+        parser.readFrame(true);
+        parser.readFrame(true);
+        parser.readFrame(true);
+
+        Assert.assertEquals("0-Settings-[3]-[1]\n" +
+                "0-Settings-End\n" +
+                "0-Settings-Ack\n" +
+                "0-Ping-[0,0,0,0,0,0,0,1]\n" +
+                getSimpleResponseTrace(1)
+                , output.getTrace());
+        output.clearTrace();
+
+        sendLargeGetRequest(3);
+
+        sendSimpleGetRequest(5);
+
+        // Default connection window size is 64k-1.
+        // Initial request will have used 8k leaving 56k-1.
+        // Stream window will be 64k-1.
+        // Expecting
+        // 1 * headers
+        // 56k-1 of body (7 * ~8k)
+        // 1 * error (could be in any order)
+        for (int i = 0; i < 8; i++) {
             parser.readFrame(true);
-            parser.readFrame(true);
-            parser.readFrame(true);
-            parser.readFrame(true);
-            parser.readFrame(true);
-
-            Assert.assertEquals("0-Settings-[3]-[1]\n" +
-                    "0-Settings-End\n" +
-                    "0-Settings-Ack\n" +
-                    "0-Ping-[0,0,0,0,0,0,0,1]\n" +
-                    getSimpleResponseTrace(1)
-                    , output.getTrace());
-            output.clearTrace();
-
-            sendLargeGetRequest(3);
-
-            sendSimpleGetRequest(5);
-
-            // Default connection window size is 64k-1.
-            // Initial request will have used 8k leaving 56k-1.
-            // Stream window will be 64k-1.
-            // Expecting
-            // 1 * headers
-            // 56k-1 of body (7 * ~8k)
-            // 1 * error (could be in any order)
-            for (int i = 0; i < 8; i++) {
-                parser.readFrame(true);
-            }
-            parser.readFrame(true);
-
-            Assert.assertTrue(output.getTrace(),
-                    output.getTrace().contains("5-RST-[" + Http2Error.REFUSED_STREAM.getCode() + "]"));
-            output.clearTrace();
-
-            // Connection window is zero.
-            // Stream window is 8k
-
-            // Expand the stream window too much to trigger an error
-            // Allow for the 8k still in the stream window
-            sendWindowUpdate(3, (1 << 31) - 1);
-
-            parser.readFrame(true);
-            Assert.assertEquals("3-RST-[" + Http2Error.FLOW_CONTROL_ERROR.getCode() + "]\n", output.getTrace());
-        } finally {
-            LogManager.getLogManager().getLogger("org.apache.coyote.http2").setLevel(Level.INFO);
         }
+        parser.readFrame(true);
+
+        Assert.assertTrue(output.getTrace(),
+                output.getTrace().contains("5-RST-[" + Http2Error.REFUSED_STREAM.getCode() + "]"));
+        output.clearTrace();
+
+        // Connection window is zero.
+        // Stream window is 8k
+
+        // Expand the stream window too much to trigger an error
+        // Allow for the 8k still in the stream window
+        sendWindowUpdate(3, (1 << 31) - 1);
+
+        parser.readFrame(true);
+        Assert.assertEquals("3-RST-[" + Http2Error.FLOW_CONTROL_ERROR.getCode() + "]\n", output.getTrace());
     }
 
 
@@ -409,28 +402,21 @@ public class TestHttp2Section_5_1 extends Http2TestBase {
                 , output.getTrace());
         output.clearTrace();
 
+        sendLargeGetRequest(3);
+
+        sendSimpleGetRequest(5);
+
         // Default connection window size is 64k-1.
         // Initial request will have used 8k leaving 56k-1.
         // Stream window will be 64k-1.
 
         // Increase Connection window by 16k
-        // Do this before sending the requests to ensure the connection window
-        // is increased before request processing starts else stream 5 may
-        // consume the connection window before the update is processed which
-        // will result in at least one addition body frame and break the tests
-        // below.
         sendWindowUpdate(0, 16 * 1024);
-
-        sendLargeGetRequest(3);
-
-        sendSimpleGetRequest(5);
 
         // Expecting
         // 1 * headers
         // 64k-1 of body (8 * ~8k)
-        // 1 * error
-        // Could be in any order
-        //
+        // 1 * error (could be in any order)
         for (int i = 0; i < 9; i++) {
             parser.readFrame(true);
         }
@@ -438,6 +424,7 @@ public class TestHttp2Section_5_1 extends Http2TestBase {
 
         Assert.assertTrue(output.getTrace(),
                 output.getTrace().contains("5-RST-[" + Http2Error.REFUSED_STREAM.getCode() + "]"));
+        output.clearTrace();
 
         // Connection window is 8k.
         // Stream window is zero.

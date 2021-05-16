@@ -47,11 +47,7 @@ import org.apache.tomcat.util.ExceptionUtils;
 * @author Craig R. McClanahan
 * @author Carson McDonald
 * @author Ignacio Ortega
-*
-* @deprecated Will be removed in Tomcat 10 onwards. Use the DataSourceRealm
-*             instead.
 */
-@Deprecated
 public class JDBCRealm
     extends RealmBase {
 
@@ -408,7 +404,7 @@ public class JDBCRealm
         ArrayList<String> roles = getRoles(username);
 
         // Create and return a suitable Principal for this user
-        return new GenericPrincipal(username, credentials, roles);
+        return new GenericPrincipal(username, roles);
     }
 
 
@@ -560,9 +556,7 @@ public class JDBCRealm
     @Override
     protected synchronized Principal getPrincipal(String username) {
 
-        return new GenericPrincipal(username,
-                                     getPassword(username),
-                                     getRoles(username));
+        return new GenericPrincipal(username, getRoles(username));
 
     }
 

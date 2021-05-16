@@ -19,12 +19,8 @@ package org.apache.tomcat.util.net;
 import java.io.File;
 import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
 
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
 
 import org.apache.catalina.connector.Connector;
@@ -36,7 +32,6 @@ import org.apache.tomcat.jni.Library;
 import org.apache.tomcat.jni.OS;
 import org.apache.tomcat.jni.Pool;
 import org.apache.tomcat.jni.Socket;
-import org.apache.tomcat.util.compat.JreCompat;
 
 /**
  * Test case for the Endpoint implementations. The testing framework will ensure
@@ -199,28 +194,5 @@ public class TestXxxEndpoint extends TomcatBaseTest {
         }
         Assert.assertNull(e);
         tomcat.getConnector().start();
-    }
-
-    @Test
-    public void testUnixDomainSocket() throws Exception {
-        Tomcat tomcat = getTomcatInstance();
-        Connector c = tomcat.getConnector();
-        Assume.assumeTrue("NIO Unix domain sockets have to be supported for this test",
-                c.getProtocolHandlerClassName().contains("NioProtocol")
-                && JreCompat.isJre16Available());
-
-        final String unixDomainSocketPath = "/tmp/testUnixDomainSocket";
-        Assert.assertTrue(c.setProperty("unixDomainSocketPath", unixDomainSocketPath));
-        tomcat.start();
-
-        SocketAddress sa = JreCompat.getInstance().getUnixDomainSocketAddress(unixDomainSocketPath);
-        ByteBuffer response = ByteBuffer.allocate(1024);
-        try (SocketChannel socket = JreCompat.getInstance().openUnixDomainSocketChannel()) {
-            socket.connect(sa);
-            socket.write(ByteBuffer.wrap("OPTIONS * HTTP/1.0\r\n\r\n".getBytes()));
-            socket.read(response);
-        }
-
-        Assert.assertTrue((new String(response.array(), 0, response.position()).startsWith("HTTP/1.1 200")));
     }
 }

@@ -29,6 +29,7 @@ class LifetimeExceededException extends Exception {
      * Create a LifetimeExceededException.
      */
     public LifetimeExceededException() {
+        super();
     }
 
     /**

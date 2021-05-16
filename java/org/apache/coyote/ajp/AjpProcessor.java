@@ -23,20 +23,20 @@ import java.io.InterruptedIOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.NoSuchProviderException;
-import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.coyote.AbstractProcessor;
 import org.apache.coyote.ActionCode;
 import org.apache.coyote.Adapter;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.coyote.ErrorState;
 import org.apache.coyote.InputBuffer;
 import org.apache.coyote.OutputBuffer;
@@ -84,7 +84,7 @@ public class AjpProcessor extends AbstractProcessor {
     private static final byte[] pongMessageArray;
 
 
-    private static final Set<String> javaxAttributes;
+    private static final Map<String,String> jakartaAttributeMapping;
     private static final Set<String> iisTlsAttributes;
 
 
@@ -129,25 +129,29 @@ public class AjpProcessor extends AbstractProcessor {
         System.arraycopy(pongMessage.getBuffer(), 0, pongMessageArray,
                 0, pongMessage.getLen());
 
-        // Build the Set of javax attributes
-        Set<String> s = new HashSet<>();
-        s.add("javax.servlet.request.cipher_suite");
-        s.add("javax.servlet.request.key_size");
-        s.add("javax.servlet.request.ssl_session");
-        s.add("javax.servlet.request.X509Certificate");
-        javaxAttributes= Collections.unmodifiableSet(s);
+        // Build Map of Java Servlet to Jakarta Servlet attribute names
+        Map<String,String> m = new HashMap<>();
+        m.put("jakarta.servlet.request.cipher_suite", "jakarta.servlet.request.cipher_suite");
+        m.put("jakarta.servlet.request.key_size", "jakarta.servlet.request.key_size");
+        m.put("jakarta.servlet.request.ssl_session", "jakarta.servlet.request.ssl_session");
+        m.put("jakarta.servlet.request.X509Certificate", "jakarta.servlet.request.X509Certificate");
+        m.put("javax.servlet.request.cipher_suite", "jakarta.servlet.request.cipher_suite");
+        m.put("javax.servlet.request.key_size", "jakarta.servlet.request.key_size");
+        m.put("javax.servlet.request.ssl_session", "jakarta.servlet.request.ssl_session");
+        m.put("javax.servlet.request.X509Certificate", "jakarta.servlet.request.X509Certificate");
+        jakartaAttributeMapping = Collections.unmodifiableMap(m);
 
-        Set<String> iis = new HashSet<>();
-        iis.add("CERT_ISSUER");
-        iis.add("CERT_SUBJECT");
-        iis.add("CERT_COOKIE");
-        iis.add("HTTPS_SERVER_SUBJECT");
-        iis.add("CERT_FLAGS");
-        iis.add("HTTPS_SECRETKEYSIZE");
-        iis.add("CERT_SERIALNUMBER");
-        iis.add("HTTPS_SERVER_ISSUER");
-        iis.add("HTTPS_KEYSIZE");
-        iisTlsAttributes = Collections.unmodifiableSet(iis);
+        Set<String> s = new HashSet<>();
+        s.add("CERT_ISSUER");
+        s.add("CERT_SUBJECT");
+        s.add("CERT_COOKIE");
+        s.add("HTTPS_SERVER_SUBJECT");
+        s.add("CERT_FLAGS");
+        s.add("HTTPS_SECRETKEYSIZE");
+        s.add("CERT_SERIALNUMBER");
+        s.add("HTTPS_SERVER_ISSUER");
+        s.add("HTTPS_KEYSIZE");
+        iisTlsAttributes = Collections.unmodifiableSet(s);
     }
 
 
@@ -393,7 +397,7 @@ public class AjpProcessor extends AbstractProcessor {
                     setErrorState(ErrorState.CLOSE_CONNECTION_NOW, null);
                     break;
                 }
-                request.setStartTime(System.currentTimeMillis());
+                request.setStartTimeNanos(System.nanoTime());
             } catch (IOException e) {
                 setErrorState(ErrorState.CLOSE_CONNECTION_NOW, e);
                 break;
@@ -665,10 +669,6 @@ public class AjpProcessor extends AbstractProcessor {
         requestHeaderMessage.getBytes(request.localName());
         request.setLocalPort(requestHeaderMessage.getInt());
 
-        if (socketWrapper != null) {
-            request.peerAddr().setString(socketWrapper.getRemoteAddr());
-        }
-
         boolean isSSL = requestHeaderMessage.getByte() != 0;
         if (isSSL) {
             request.scheme().setString("https");
@@ -767,8 +767,10 @@ public class AjpProcessor extends AbstractProcessor {
                     request.setAttribute(SSLSupport.PROTOCOL_VERSION_KEY, v);
                 } else if (n.equals("JK_LB_ACTIVATION")) {
                     request.setAttribute(n, v);
-                } else if (javaxAttributes.contains(n)) {
-                    request.setAttribute(n, v);
+                } else if (jakartaAttributeMapping.containsKey(n)) {
+                    // AJP uses the Java Servlet attribute names.
+                    // Need to convert these to Jakarta Servlet.
+                    request.setAttribute(jakartaAttributeMapping.get(n), v);
                 } else if (iisTlsAttributes.contains(n)) {
                     // Allow IIS TLS attributes
                     request.setAttribute(n, v);
@@ -1062,7 +1064,7 @@ public class AjpProcessor extends AbstractProcessor {
 
 
     @Override
-    protected final void ack(ContinueResponseTiming continueResponseTiming) {
+    protected final void ack() {
         // NO-OP for AJP
     }
 
@@ -1172,7 +1174,10 @@ public class AjpProcessor extends AbstractProcessor {
                         jsseCerts = temp;
                     }
                 }
-            } catch (CertificateException | NoSuchProviderException e) {
+            } catch (java.security.cert.CertificateException e) {
+                getLog().error(sm.getString("ajpprocessor.certs.fail"), e);
+                return;
+            } catch (NoSuchProviderException e) {
                 getLog().error(sm.getString("ajpprocessor.certs.fail"), e);
                 return;
             }

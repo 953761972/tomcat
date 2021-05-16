@@ -63,6 +63,17 @@ import org.apache.tomcat.dbcp.pool2.impl.GenericObjectPoolConfig;
  */
 public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBeanRegistration, AutoCloseable {
 
+    /**
+     * @since 2.0
+     */
+    private class PaGetConnection implements PrivilegedExceptionAction<Connection> {
+
+        @Override
+        public Connection run() throws SQLException {
+            return createDataSource().getConnection();
+        }
+    }
+
     private static final Log log = LogFactory.getLog(BasicDataSource.class);
 
     static {
@@ -76,6 +87,7 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
             if (Utils.IS_SECURITY_ENABLED) {
                 final ClassLoader loader = BasicDataSource.class.getClassLoader();
                 final String dbcpPackageName = BasicDataSource.class.getPackage().getName();
+                loader.loadClass(dbcpPackageName + ".BasicDataSource$PaGetConnection");
                 loader.loadClass(dbcpPackageName + ".DelegatingCallableStatement");
                 loader.loadClass(dbcpPackageName + ".DelegatingDatabaseMetaData");
                 loader.loadClass(dbcpPackageName + ".DelegatingPreparedStatement");
@@ -207,8 +219,6 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      * and CallableStatements are pooled.
      */
     private boolean poolPreparedStatements = false;
-
-    private boolean clearStatementPoolOnReturn = false;
 
     /**
      * <p>
@@ -392,7 +402,7 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      * </p>
      * <p>
      * Attempts to acquire connections using {@link #getConnection()} after this method has been invoked result in
-     * SQLExceptions.  To reopen a datasource that has been closed using this method, use {@link #start()}.
+     * SQLExceptions.
      * </p>
      * <p>
      * This method is idempotent - i.e., closing an already closed BasicDataSource has no effect and does not generate
@@ -438,7 +448,7 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
     }
 
     /**
-     * Creates a JDBC connection factory for this data source. The JDBC driver is loaded using the following algorithm:
+     * Creates a JDBC connection factory for this datasource. The JDBC driver is loaded using the following algorithm:
      * <ol>
      * <li>If a Driver instance has been specified via {@link #setDriver(Driver)} use it</li>
      * <li>If no Driver instance was specified and {@link #driverClassName} is specified that class is loaded using the
@@ -454,13 +464,12 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      *
      * @return A new connection factory.
      *
-     * @throws SQLException If the connection factory cannot be created
+     * @throws SQLException If the connection factort cannot be created
      */
     protected ConnectionFactory createConnectionFactory() throws SQLException {
         // Load the JDBC driver class
         return ConnectionFactoryFactory.createConnectionFactory(this, DriverFactory.createDriver(this));
     }
-
 
     /**
      * Creates a connection pool for this datasource. This method only exists so subclasses can replace the
@@ -521,6 +530,7 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
             if (dataSource != null) {
                 return dataSource;
             }
+
             jmxRegister();
 
             // create factory which returns raw physical connections
@@ -528,14 +538,16 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
 
             // Set up the poolable connection factory
             boolean success = false;
-            final PoolableConnectionFactory poolableConnectionFactory;
+            PoolableConnectionFactory poolableConnectionFactory;
             try {
                 poolableConnectionFactory = createPoolableConnectionFactory(driverConnectionFactory);
                 poolableConnectionFactory.setPoolStatements(poolPreparedStatements);
                 poolableConnectionFactory.setMaxOpenPreparedStatements(maxOpenPreparedStatements);
                 success = true;
-            } catch (final SQLException | RuntimeException se) {
+            } catch (final SQLException se) {
                 throw se;
+            } catch (final RuntimeException rte) {
+                throw rte;
             } catch (final Exception ex) {
                 throw new SQLException("Error creating connection factory", ex);
             }
@@ -552,8 +564,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
                 newDataSource = createDataSourceInstance();
                 newDataSource.setLogWriter(logWriter);
                 success = true;
-            } catch (final SQLException | RuntimeException se) {
+            } catch (final SQLException se) {
                 throw se;
+            } catch (final RuntimeException rte) {
+                throw rte;
             } catch (final Exception ex) {
                 throw new SQLException("Error creating datasource", ex);
             } finally {
@@ -605,7 +619,7 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     protected GenericObjectPool<PoolableConnection> createObjectPool(final PoolableConnectionFactory factory,
             final GenericObjectPoolConfig<PoolableConnection> poolConfig, final AbandonedConfig abandonedConfig) {
-        final GenericObjectPool<PoolableConnection> gop;
+        GenericObjectPool<PoolableConnection> gop;
         if (abandonedConfig != null && (abandonedConfig.getRemoveAbandonedOnBorrow()
                 || abandonedConfig.getRemoveAbandonedOnMaintenance())) {
             gop = new GenericObjectPool<>(factory, poolConfig, abandonedConfig);
@@ -640,7 +654,6 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
             connectionFactory.setDefaultSchema(defaultSchema);
             connectionFactory.setCacheState(cacheState);
             connectionFactory.setPoolStatements(poolPreparedStatements);
-            connectionFactory.setClearStatementPoolOnReturn(clearStatementPoolOnReturn);
             connectionFactory.setMaxOpenPreparedStatements(maxOpenPreparedStatements);
             connectionFactory.setMaxConnLifetimeMillis(maxConnLifetimeMillis);
             connectionFactory.setRollbackOnReturn(getRollbackOnReturn());
@@ -674,7 +687,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      * @return The print writer used by this configuration to log information on abandoned objects.
      */
     public PrintWriter getAbandonedLogWriter() {
-        return abandonedConfig == null ? null : abandonedConfig.getLogWriter();
+        if (abandonedConfig != null) {
+            return abandonedConfig.getLogWriter();
+        }
+        return null;
     }
 
     /**
@@ -686,7 +702,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     @Override
     public boolean getAbandonedUsageTracking() {
-        return abandonedConfig != null && abandonedConfig.getUseUsageTracking();
+        if (abandonedConfig != null) {
+            return abandonedConfig.getUseUsageTracking();
+        }
+        return false;
     }
 
     /**
@@ -719,7 +738,7 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
     @Override
     public Connection getConnection() throws SQLException {
         if (Utils.IS_SECURITY_ENABLED) {
-            final PrivilegedExceptionAction<Connection> action = () -> createDataSource().getConnection();
+            final PrivilegedExceptionAction<Connection> action = new PaGetConnection();
             try {
                 return AccessController.doPrivileged(action);
             } catch (final PrivilegedActionException e) {
@@ -771,7 +790,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     public List<String> getConnectionInitSqls() {
         final List<String> result = connectionInitSqls;
-        return result == null ? Collections.emptyList() : result;
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        return result;
     }
 
     /**
@@ -779,7 +801,8 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     @Override
     public String[] getConnectionInitSqlsAsArray() {
-        return getConnectionInitSqls().toArray(Utils.EMPTY_STRING_ARRAY);
+        final Collection<String> result = getConnectionInitSqls();
+        return result.toArray(new String[0]);
     }
 
     protected GenericObjectPool<PoolableConnection> getConnectionPool() {
@@ -861,7 +884,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     public Set<String> getDisconnectionSqlCodes() {
         final Set<String> result = disconnectionSqlCodes;
-        return result == null ? Collections.emptySet() : result;
+        if (result == null) {
+            return Collections.emptySet();
+        }
+        return result;
     }
 
     /**
@@ -871,7 +897,8 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     @Override
     public String[] getDisconnectionSqlCodesAsArray() {
-        return getDisconnectionSqlCodes().toArray(Utils.EMPTY_STRING_ARRAY);
+        final Collection<String> result = getDisconnectionSqlCodes();
+        return result.toArray(new String[0]);
     }
 
     /**
@@ -994,7 +1021,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     @Override
     public boolean getLogAbandoned() {
-        return abandonedConfig != null && abandonedConfig.getLogAbandoned();
+        if (abandonedConfig != null) {
+            return abandonedConfig.getLogAbandoned();
+        }
+        return false;
     }
 
     /**
@@ -1025,7 +1055,8 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     @Override
     public int getLoginTimeout() throws SQLException {
-        // This method isn't supported by the PoolingDataSource returned by the createDataSource
+        // This method isn't supported by the PoolingDataSource returned by the
+        // createDataSource
         throw new UnsupportedOperationException("Not supported by BasicDataSource");
     }
 
@@ -1139,7 +1170,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
     public int getNumActive() {
         // Copy reference to avoid NPE if close happens after null check
         final GenericObjectPool<PoolableConnection> pool = connectionPool;
-        return pool == null ? 0 : pool.getNumActive();
+        if (pool != null) {
+            return pool.getNumActive();
+        }
+        return 0;
     }
 
     /**
@@ -1151,7 +1185,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
     public int getNumIdle() {
         // Copy reference to avoid NPE if close happens after null check
         final GenericObjectPool<PoolableConnection> pool = connectionPool;
-        return pool == null ? 0 : pool.getNumIdle();
+        if (pool != null) {
+            return pool.getNumIdle();
+        }
+        return 0;
     }
 
     /**
@@ -1209,7 +1246,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     @Override
     public boolean getRemoveAbandonedOnBorrow() {
-        return abandonedConfig != null && abandonedConfig.getRemoveAbandonedOnBorrow();
+        if (abandonedConfig != null) {
+            return abandonedConfig.getRemoveAbandonedOnBorrow();
+        }
+        return false;
     }
 
     /**
@@ -1230,7 +1270,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     @Override
     public boolean getRemoveAbandonedOnMaintenance() {
-        return abandonedConfig != null && abandonedConfig.getRemoveAbandonedOnMaintenance();
+        if (abandonedConfig != null) {
+            return abandonedConfig.getRemoveAbandonedOnMaintenance();
+        }
+        return false;
     }
 
     /**
@@ -1255,7 +1298,10 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     @Override
     public int getRemoveAbandonedTimeout() {
-        return abandonedConfig == null ? 300 : abandonedConfig.getRemoveAbandonedTimeout();
+        if (abandonedConfig != null) {
+            return abandonedConfig.getRemoveAbandonedTimeout();
+        }
+        return 300;
     }
 
     /**
@@ -1432,18 +1478,7 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
     }
 
     /**
-     * Returns true if the statement pool is cleared when the connection is returned to its pool.
-     *
-     * @return true if the statement pool is cleared at connection return
-     * @since 2.8.0
-     */
-    @Override
-    public boolean isClearStatementPoolOnReturn() {
-        return clearStatementPoolOnReturn;
-    }
-
-    /**
-     * If true, this data source is closed and no more connections can be retrieved from this data source.
+     * If true, this data source is closed and no more connections can be retrieved from this datasource.
      *
      * @return true, if the data source is closed; false otherwise
      */
@@ -1458,8 +1493,8 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      * @param value the string to test, may be null.
      * @return boolean false if value is null, otherwise {@link String#isEmpty()}.
      */
-    private boolean isEmpty(final String value) {
-        return value == null || value.trim().isEmpty();
+    private boolean isEmpty(String value) {
+        return value == null ? true : value.trim().isEmpty();
     }
 
     /**
@@ -1507,7 +1542,7 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      *
      * @since 2.7.0
      */
-    protected void log(final String message, final Throwable throwable) {
+    protected void log(String message, Throwable throwable) {
         if (logWriter != null) {
             logWriter.println(message);
             throwable.printStackTrace(logWriter);
@@ -1553,31 +1588,6 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     public void removeConnectionProperty(final String name) {
         connectionProperties.remove(name);
-    }
-
-    /**
-     * Restarts the datasource.
-     * <p>
-     * This method calls {@link #close()} and {@link #start()} in sequence within synchronized scope so any
-     * connection requests that come in while the datasource is shutting down will be served by the new pool.
-     * <p>
-     * Idle connections that are stored in the connection pool when this method is invoked are closed, but
-     * connections that are checked out to clients when this method is invoked are not affected. When client
-     * applications subsequently invoke {@link Connection#close()} to return these connections to the pool, the
-     * underlying JDBC connections are closed. These connections do not count in {@link #getMaxTotal()} or
-     * {@link #getNumActive()} after invoking this method. For example, if there are 3 connections checked out by
-     * clients when {@link #restart()} is invoked, after this method is called, {@link #getNumActive()} will
-     * return 0 and up to {@link #getMaxTotal()} + 3 connections may be open until the connections sourced from
-     * the original pool are returned.
-     * <p>
-     * The new connection pool created by this method is initialized with currently set configuration properties.
-     *
-     * @throws SQLException if an error occurs initializing the datasource
-     */
-    @Override
-    public synchronized void restart() throws SQLException {
-        close();
-        start();
     }
 
     /**
@@ -1645,6 +1655,8 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
         this.autoCommitOnReturn = autoCommitOnReturn;
     }
 
+    // ----------------------------------------------------- DataSource Methods
+
     /**
      * Sets the state caching flag.
      *
@@ -1655,24 +1667,17 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
     }
 
     /**
-     * Sets whether the pool of statements (which was enabled with {@link #setPoolPreparedStatements(boolean)}) should
-     * be cleared when the connection is returned to its pool. Default is false.
-     *
-     * @param clearStatementPoolOnReturn clear or not
-     * @since 2.8.0
-     */
-    public void setClearStatementPoolOnReturn(final boolean clearStatementPoolOnReturn) {
-        this.clearStatementPoolOnReturn = clearStatementPoolOnReturn;
-    }
-
-    /**
      * Sets the ConnectionFactory class name.
      *
      * @param connectionFactoryClassName A class name.
      * @since 2.7.0
      */
     public void setConnectionFactoryClassName(final String connectionFactoryClassName) {
-        this.connectionFactoryClassName = isEmpty(connectionFactoryClassName) ? null : connectionFactoryClassName;
+        if (isEmpty(connectionFactoryClassName)) {
+            this.connectionFactoryClassName = null;
+        } else {
+            this.connectionFactoryClassName = connectionFactoryClassName;
+        }
     }
 
     /**
@@ -1763,7 +1768,11 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      * @param defaultCatalog the default catalog
      */
     public void setDefaultCatalog(final String defaultCatalog) {
-        this.defaultCatalog = isEmpty(defaultCatalog) ? null : defaultCatalog;
+        if (isEmpty(defaultCatalog)) {
+            this.defaultCatalog = null;
+        } else {
+            this.defaultCatalog = defaultCatalog;
+        }
     }
 
     /**
@@ -1806,7 +1815,11 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      * @since 2.5.0
      */
     public void setDefaultSchema(final String defaultSchema) {
-        this.defaultSchema = isEmpty(defaultSchema) ? null : defaultSchema;
+        if (isEmpty(defaultSchema)) {
+            this.defaultSchema = null;
+        } else {
+            this.defaultSchema = defaultSchema;
+        }
     }
 
     /**
@@ -1907,7 +1920,11 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      * @param driverClassName the class name of the JDBC driver
      */
     public synchronized void setDriverClassName(final String driverClassName) {
-        this.driverClassName = isEmpty(driverClassName) ? null : driverClassName;
+        if (isEmpty(driverClassName)) {
+            this.driverClassName = null;
+        } else {
+            this.driverClassName = driverClassName;
+        }
     }
 
     /**
@@ -2392,7 +2409,11 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      * @param validationQuery the new value for the validation query
      */
     public void setValidationQuery(final String validationQuery) {
-        this.validationQuery = isEmpty(validationQuery) ? null : validationQuery;
+        if (isEmpty(validationQuery)) {
+            this.validationQuery = null;
+        } else {
+            this.validationQuery = validationQuery;
+        }
     }
 
     /**
@@ -2408,29 +2429,6 @@ public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBean
      */
     public void setValidationQueryTimeout(final int validationQueryTimeoutSeconds) {
         this.validationQueryTimeoutSeconds = validationQueryTimeoutSeconds;
-    }
-
-    /**
-     * Starts the datasource.
-     * <p>
-     * It is not necessary to call this method before using a newly created BasicDataSource instance, but
-     * calling it in that context causes the datasource to be immediately initialized (instead of waiting for
-     * the first {@link #getConnection()} request). Its primary use is to restart and reinitialize a
-     * datasource that has been closed.
-     * <p>
-     * When this method is called after {@link #close()}, connections checked out by clients
-     * before the datasource was stopped do not count in {@link #getMaxTotal()} or {@link #getNumActive()}.
-     * For example, if there are 3 connections checked out by clients when {@link #close()} is invoked and they are
-     * not returned before {@link #start()} is invoked, after this method is called, {@link #getNumActive()} will
-     * return 0.  These connections will be physically closed when they are returned, but they will not count against
-     * the maximum allowed in the newly started datasource.
-     *
-     * @throws SQLException if an error occurs initializing the datasource
-     */
-    @Override
-    public synchronized void start() throws SQLException {
-        closed = false;
-        createDataSource();
     }
 
     /**

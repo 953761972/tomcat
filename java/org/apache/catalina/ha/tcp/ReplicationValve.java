@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import javax.servlet.ServletException;
+import jakarta.servlet.ServletException;
 
 import org.apache.catalina.Cluster;
 import org.apache.catalina.Context;
@@ -325,7 +325,7 @@ public class ReplicationValve
                     log.debug(sm.getString("ReplicationValve.crossContext.add"));
                 }
                 //FIXME add Pool of Arraylists
-                crossContextSessions.set(new ArrayList<>());
+                crossContextSessions.set(new ArrayList<DeltaSession>());
             }
             getNext().invoke(request, response);
             if(context != null && cluster != null

@@ -33,14 +33,9 @@ public class BackportEnglish extends BackportBase {
 
 
     public static void main(String... args) throws IOException {
-        // Exclude keys known to be different between 9.0.x and 8.5.x
-        keysToExclude.add("java.org.apache.catalina.manager.zzz.htmlManagerServlet.deployPath");
-        keysToExclude.add("java.org.apache.catalina.mbeans.zzz.jmxRemoteLifecycleListener.deprecated");
-        keysToExclude.add("java.org.apache.catalina.startup.zzz.catalina.stopServer.connectException");
+        // Exclude keys known to be different between 10.0.x and 9.0.x
+        keysToExclude.add("java.org.apache.catalina.connector.zzz.coyoteConnector.notAsciiSuperset");
         keysToExclude.add("java.org.apache.jasper.resources.zzz.jsp.error.jsproot.version.invalid");
-        keysToExclude.add("java.org.apache.jasper.resources.zzz.jspc.usage");
-        keysToExclude.add("java.org.apache.jasper.resources.zzz.jspc.webfrg.header");
-        keysToExclude.add("java.org.apache.jasper.resources.zzz.jspc.webxml.header");
 
         BackportEnglish backport = new BackportEnglish(args);
         backport.execute();

@@ -25,12 +25,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.coyote.AbstractProcessor;
 import org.apache.coyote.ActionCode;
 import org.apache.coyote.Adapter;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.coyote.ErrorState;
 import org.apache.coyote.Request;
 import org.apache.coyote.RequestInfo;
@@ -336,7 +335,7 @@ public class Http11Processor extends AbstractProcessor {
                         InternalHttpUpgradeHandler upgradeHandler =
                                 upgradeProtocol.getInternalUpgradeHandler(
                                         socketWrapper, getAdapter(), cloneRequest(request));
-                        UpgradeToken upgradeToken = new UpgradeToken(upgradeHandler, null, null, requestedProtocol);
+                        UpgradeToken upgradeToken = new UpgradeToken(upgradeHandler, null, null);
                         action(ActionCode.UPGRADE, upgradeToken);
                         return SocketState.UPGRADING;
                     }
@@ -537,7 +536,7 @@ public class Http11Processor extends AbstractProcessor {
             // Ignore, an error here is already processed in prepareRequest
             // but is done again since the content length is still -1
         }
-        if (contentLength > 0 && protocol.getMaxSwallowSize() > -1 &&
+        if (contentLength > 0 &&
                 (contentLength - request.getBytesRead() > protocol.getMaxSwallowSize())) {
             // There is more data to swallow than Tomcat will accept so the
             // connection is going to be closed. Disable keep-alive which will
@@ -787,7 +786,6 @@ public class Http11Processor extends AbstractProcessor {
                 // so remove it.
                 headers.removeHeader("content-length");
                 request.setContentLength(-1);
-                keepAlive = false;
             } else {
                 inputBuffer.addActiveFilter(inputFilters[Constants.IDENTITY_FILTER]);
                 contentDelimitation = true;
@@ -925,13 +923,9 @@ public class Http11Processor extends AbstractProcessor {
 
         // FIXME: Add transfer encoding header
 
-        if ((entityBody) && (!contentDelimitation) || connectionClosePresent) {
-            // Disable keep-alive if:
-            // - there is a response body but way for the client to determine
-            //   the content length information; or
-            // - there is a "connection: close" header present
-            // This will cause the "connection: close" header to be added if it
-            // is not already present.
+        if ((entityBody) && (!contentDelimitation)) {
+            // Mark as close the connection after the request, and add the
+            // connection: close header
             keepAlive = false;
         }
 
@@ -1166,26 +1160,15 @@ public class Http11Processor extends AbstractProcessor {
 
     @Override
     protected final void ack() {
-        ack(ContinueResponseTiming.ALWAYS);
-    }
-
-
-    @Override
-    protected final void ack(ContinueResponseTiming continueResponseTiming) {
-        // Only try and send the ACK for ALWAYS or if the timing of the request
-        // to send the ACK matches the current configuration.
-        if (continueResponseTiming == ContinueResponseTiming.ALWAYS ||
-                continueResponseTiming == protocol.getContinueResponseTimingInternal()) {
-            // Acknowledge request
-            // Send a 100 status back if it makes sense (response not committed
-            // yet, and client specified an expectation for 100-continue)
-            if (!response.isCommitted() && request.hasExpectation()) {
-                inputBuffer.setSwallowInput(true);
-                try {
-                    outputBuffer.sendAck();
-                } catch (IOException e) {
-                    setErrorState(ErrorState.CLOSE_CONNECTION_NOW, e);
-                }
+        // Acknowledge request
+        // Send a 100 status back if it makes sense (response not committed
+        // yet, and client specified an expectation for 100-continue)
+        if (!response.isCommitted() && request.hasExpectation()) {
+            inputBuffer.setSwallowInput(true);
+            try {
+                outputBuffer.sendAck();
+            } catch (IOException e) {
+                setErrorState(ErrorState.CLOSE_CONNECTION_NOW, e);
             }
         }
     }

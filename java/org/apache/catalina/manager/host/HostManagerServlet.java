@@ -28,11 +28,12 @@ import java.util.StringTokenizer;
 import javax.management.InstanceNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
-import javax.servlet.ServletException;
-import javax.servlet.UnavailableException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.UnavailableException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.Container;
 import org.apache.catalina.ContainerServlet;
@@ -394,7 +395,7 @@ public class HostManagerServlet
                         "hostManagerServlet.configBaseCreateFail", name));
                 return;
             }
-            try (InputStream is = getServletContext().getResourceAsStream("/WEB-INF/manager.xml")) {
+            try (InputStream is = getServletContext().getResourceAsStream("/manager.xml")) {
                 Path dest = (new File(configBaseFile, "manager.xml")).toPath();
                 Files.copy(is, dest);
             } catch (IOException e) {
@@ -410,7 +411,7 @@ public class HostManagerServlet
         host.addLifecycleListener(new HostConfig());
 
         // Add host aliases
-        if ((aliases != null) && !aliases.isEmpty()) {
+        if ((aliases != null) && !("".equals(aliases))) {
             StringTokenizer tok = new StringTokenizer(aliases, ", ");
             while (tok.hasMoreTokens()) {
                 host.addAlias(tok.nextToken());

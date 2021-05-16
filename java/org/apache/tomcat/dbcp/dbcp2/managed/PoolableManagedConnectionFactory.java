@@ -90,7 +90,7 @@ public class PoolableManagedConnectionFactory extends PoolableConnectionFactory 
             if (dataSourceJmxName != null) {
                 final StringBuilder base = new StringBuilder(dataSourceJmxName.toString());
                 base.append(Constants.JMX_CONNECTION_BASE_EXT);
-                base.append(connIndex);
+                base.append(Long.toString(connIndex));
                 config.setJmxNameBase(base.toString());
                 config.setJmxNamePrefix(Constants.JMX_STATEMENT_POOL_PREFIX);
             } else {

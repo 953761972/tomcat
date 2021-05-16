@@ -25,11 +25,11 @@ import java.nio.charset.CodingErrorAction;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import javax.websocket.CloseReason;
-import javax.websocket.CloseReason.CloseCodes;
-import javax.websocket.Extension;
-import javax.websocket.MessageHandler;
-import javax.websocket.PongMessage;
+import jakarta.websocket.CloseReason;
+import jakarta.websocket.CloseReason.CloseCodes;
+import jakarta.websocket.Extension;
+import jakarta.websocket.MessageHandler;
+import jakarta.websocket.PongMessage;
 
 import org.apache.juli.logging.Log;
 import org.apache.tomcat.util.ExceptionUtils;
@@ -113,7 +113,7 @@ public abstract class WsFrameBase {
 
     protected void processInputBuffer() throws IOException {
         while (!isSuspended()) {
-            wsSession.updateLastActiveRead();
+            wsSession.updateLastActive();
             if (state == State.NEW_FRAME) {
                 if (!processInitialHeader()) {
                     break;
@@ -307,21 +307,8 @@ public abstract class WsFrameBase {
                 result = processDataBinary();
             }
         }
-        if (result) {
-            updateStats(payloadLength);
-        }
         checkRoomPayload();
         return result;
-    }
-
-
-    /**
-     * Hook for updating server side statistics. Called on every frame received.
-     *
-     * @param payloadLength Size of message payload
-     */
-    protected void updateStats(long payloadLength) {
-        // NO-OP by default
     }
 
 
@@ -912,7 +899,7 @@ public abstract class WsFrameBase {
     protected abstract void resumeProcessing();
 
 
-    private abstract static class TerminalTransformation implements Transformation {
+    private abstract class TerminalTransformation implements Transformation {
 
         @Override
         public boolean validateRsvBits(int i) {

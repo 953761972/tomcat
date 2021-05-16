@@ -71,7 +71,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
     /**
      * State.
      */
-    private volatile boolean parsingHeader;
+    private boolean parsingHeader;
 
 
     /**
@@ -130,7 +130,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
      */
     private byte prevChr = 0;
     private byte chr = 0;
-    private volatile boolean parsingRequestLine;
+    private boolean parsingRequestLine;
     private int parsingRequestLinePhase = 0;
     private boolean parsingRequestLineEol = false;
     private int parsingRequestLineStart = 0;
@@ -266,22 +266,18 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
         byteBuffer.limit(0).position(0);
         lastActiveFilter = -1;
+        parsingHeader = true;
         swallowInput = true;
 
         chr = 0;
         prevChr = 0;
         headerParsePos = HeaderParsePosition.HEADER_START;
+        parsingRequestLine = true;
         parsingRequestLinePhase = 0;
         parsingRequestLineEol = false;
         parsingRequestLineStart = 0;
         parsingRequestLineQPos = -1;
         headerData.recycle();
-        // Recycled last because they are volatile
-        // All variables visible to this thread are guaranteed to be visible to
-        // any other thread once that thread reads the same volatile. The first
-        // action when parsing input data is to read one of these volatiles.
-        parsingRequestLine = true;
-        parsingHeader = true;
     }
 
 
@@ -380,8 +376,8 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
                 }
                 // Set the start time once we start reading data (even if it is
                 // just skipping blank lines)
-                if (request.getStartTime() < 0) {
-                    request.setStartTime(System.currentTimeMillis());
+                if (request.getStartTimeNanos() < 0) {
+                    request.setStartTimeNanos(System.nanoTime());
                 }
                 chr = byteBuffer.get();
             } while ((chr == Constants.CR) || (chr == Constants.LF));
@@ -389,6 +385,10 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
             parsingRequestLineStart = byteBuffer.position();
             parsingRequestLinePhase = 2;
+            if (log.isDebugEnabled()) {
+                log.debug("Received ["
+                        + new String(byteBuffer.array(), byteBuffer.position(), byteBuffer.remaining(), StandardCharsets.ISO_8859_1) + "]");
+            }
         }
         if (parsingRequestLinePhase == 2) {
             //
@@ -550,16 +550,11 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
                 prevChr = chr;
                 chr = byteBuffer.get();
                 if (chr == Constants.CR) {
-                    // Possible end of request line. Need LF next else invalid.
+                    // Possible end of request line. Need LF next.
                 } else if (prevChr == Constants.CR && chr == Constants.LF) {
-                    // CRLF is the standard line terminator
                     end = pos - 1;
                     parsingRequestLineEol = true;
-                } else if (chr == Constants.LF) {
-                    // LF is an optional line terminator
-                    end = pos;
-                    parsingRequestLineEol = true;
-                } else if (prevChr == Constants.CR || !HttpParser.isHttpProtocol(chr)) {
+                } else if (!HttpParser.isHttpProtocol(chr)) {
                     String invalidProtocol = parseInvalid(parsingRequestLineStart, byteBuffer);
                     throw new IllegalArgumentException(sm.getString("iib.invalidHttpProtocol", invalidProtocol));
                 }
@@ -629,7 +624,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
         while (buffer.hasRemaining() && b != 0x20) {
             b = buffer.get();
         }
-        String result = HeaderUtil.toPrintableString(buffer.array(), buffer.arrayOffset() + startPos, buffer.position() - startPos);
+        String result = HeaderUtil.toPrintableString(buffer.array(), buffer.arrayOffset() + startPos, buffer.position() - startPos - 1);
         if (b != 0x20) {
             // Ran out of buffer rather than found a space
             result = result + "...";
@@ -659,10 +654,8 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
 
     /**
-     * Available bytes in the buffers for the current request.
-     *
-     * Note that when requests are pipelined, the data in byteBuffer may relate
-     * to the next request rather than this one.
+     * Available bytes in the buffers (note that due to encoding, this may not
+     * correspond).
      */
     int available(boolean read) {
         int available;
@@ -673,19 +666,12 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
             available = activeFilters[lastActiveFilter].available();
         }
 
-        // Only try a non-blocking read if:
-        // - there is no data in the filters
-        // - the caller requested a read
-        // - there is no data in byteBuffer
-        // - the socket wrapper indicates a read is allowed
-        //
-        // Notes: 1. When pipelined requests are being used available may be
-        //        zero even when byteBuffer has data. This is because the data
-        //        in byteBuffer is for the next request. We don't want to
-        //        attempt a read in this case.
-        //        2. wrapper.hasDataToRead() is present to handle the NIO2 case
+        if (available > 0 || !read) {
+            return available;
+        }
+
         try {
-            if (available == 0 && read && !byteBuffer.hasRemaining() && wrapper.hasDataToRead()) {
+            if (wrapper.hasDataToRead()) {
                 fill(false);
                 available = byteBuffer.remaining();
             }
@@ -708,9 +694,22 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
      * faking non-blocking reads with the blocking IO connector.
      */
     boolean isFinished() {
-        // The active filters have the definitive information on whether or not
-        // the current request body has been read. Note that byteBuffer may
-        // contain pipelined data so is not a good indicator.
+        if (byteBuffer.limit() > byteBuffer.position()) {
+            // Data to read in the buffer so not finished
+            return false;
+        }
+
+        /*
+         * Don't use fill(false) here because in the following circumstances
+         * BIO will block - possibly indefinitely
+         * - client is using keep-alive and connection is still open
+         * - client has sent the complete request
+         * - client has not sent any of the next request (i.e. no pipelining)
+         * - application has read the complete request
+         */
+
+        // Check the InputFilters
+
         if (lastActiveFilter >= 0) {
             return activeFilters[lastActiveFilter].isFinished();
         } else {
@@ -766,13 +765,11 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
     private boolean fill(boolean block) throws IOException {
 
         if (log.isDebugEnabled()) {
-            log.debug("Before fill(): parsingHeader: [" + parsingHeader +
+            log.debug("parsingHeader: [" + parsingHeader +
                     "], parsingRequestLine: [" + parsingRequestLine +
                     "], parsingRequestLinePhase: [" + parsingRequestLinePhase +
                     "], parsingRequestLineStart: [" + parsingRequestLineStart +
-                    "], byteBuffer.position(): [" + byteBuffer.position() +
-                    "], byteBuffer.limit(): [" + byteBuffer.limit() +
-                    "], end: [" + end + "]");
+                    "], byteBuffer.position() [" + byteBuffer.position() + "]");
         }
 
         if (parsingHeader) {
@@ -787,31 +784,19 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
             byteBuffer.limit(end).position(end);
         }
 
-        int nRead = -1;
         byteBuffer.mark();
-        try {
-            if (byteBuffer.position() < byteBuffer.limit()) {
-                byteBuffer.position(byteBuffer.limit());
-            }
-            byteBuffer.limit(byteBuffer.capacity());
-            SocketWrapperBase<?> socketWrapper = this.wrapper;
-            if (socketWrapper != null) {
-                nRead = socketWrapper.read(block, byteBuffer);
-            } else {
-                throw new CloseNowException(sm.getString("iib.eof.error"));
-            }
-        } finally {
-            // Ensure that the buffer limit and position are returned to a
-            // consistent "ready for read" state if an error occurs during in
-            // the above code block.
-            byteBuffer.limit(byteBuffer.position()).reset();
+        if (byteBuffer.position() < byteBuffer.limit()) {
+            byteBuffer.position(byteBuffer.limit());
         }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Received ["
-                    + new String(byteBuffer.array(), byteBuffer.position(), byteBuffer.remaining(), StandardCharsets.ISO_8859_1) + "]");
+        byteBuffer.limit(byteBuffer.capacity());
+        SocketWrapperBase<?> socketWrapper = this.wrapper;
+        int nRead = -1;
+        if (socketWrapper != null) {
+            nRead = socketWrapper.read(block, byteBuffer);
+        } else {
+            throw new CloseNowException(sm.getString("iib.eof.error"));
         }
-
+        byteBuffer.limit(byteBuffer.position()).reset();
         if (nRead > 0) {
             return true;
         } else if (nRead == -1) {
@@ -846,8 +831,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
 
             if (chr == Constants.CR && prevChr != Constants.CR) {
                 // Possible start of CRLF - process the next byte.
-            } else if (chr == Constants.LF) {
-                // CRLF or LF is an acceptable line terminator
+            } else if (prevChr == Constants.CR && chr == Constants.LF) {
                 return HeaderParseStatus.DONE;
             } else {
                 if (prevChr == Constants.CR) {
@@ -959,8 +943,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
                     chr = byteBuffer.get();
                     if (chr == Constants.CR) {
                         // Possible start of CRLF - process the next byte.
-                    } else if (chr == Constants.LF) {
-                        // CRLF or LF is an acceptable line terminator
+                    } else if (prevChr == Constants.CR && chr == Constants.LF) {
                         eol = true;
                     } else if (prevChr == Constants.CR) {
                         // Invalid value
@@ -1038,8 +1021,7 @@ public class Http11InputBuffer implements InputBuffer, ApplicationBufferHandler 
             chr = byteBuffer.get();
             if (chr == Constants.CR) {
                 // Skip
-            } else if (chr == Constants.LF) {
-                // CRLF or LF is an acceptable line terminator
+            } else if (prevChr == Constants.CR && chr == Constants.LF) {
                 eol = true;
             } else {
                 headerData.lastSignificantChar = pos;

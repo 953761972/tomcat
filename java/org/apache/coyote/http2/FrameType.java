@@ -53,11 +53,6 @@ enum FrameType {
     }
 
 
-    int getId() {
-        return id;
-    }
-
-
     byte getIdByte() {
         return (byte) id;
     }

@@ -38,9 +38,9 @@ import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
-import javax.servlet.Servlet;
-import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet;
+import jakarta.servlet.Servlet;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
 
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
@@ -128,7 +128,7 @@ import org.apache.tomcat.util.res.StringManager;
  * default web.xml; rather, they add a {@link LifecycleListener} to configure
  * the defaults. Any WEB-INF/web.xml and META-INF/context.xml packaged with the
  * application will be processed normally. Normal web fragment and
- * {@link javax.servlet.ServletContainerInitializer} processing will be applied.
+ * {@link jakarta.servlet.ServletContainerInitializer} processing will be applied.
  *
  * <p>
  * In complex cases, you may prefer to use the ordinary Tomcat API to create
@@ -153,7 +153,7 @@ import org.apache.tomcat.util.res.StringManager;
  * see setters for doc. It can be used for simple tests and
  * demo.
  *
- * @see <a href="https://gitbox.apache.org/repos/asf?p=tomcat.git;a=blob;f=test/org/apache/catalina/startup/TestTomcat.java">TestTomcat</a>
+ * @see <a href="https://svn.apache.org/repos/asf/tomcat/trunk/test/org/apache/catalina/startup/TestTomcat.java">TestTomcat</a>
  * @author Costin Manolache
  */
 public class Tomcat {
@@ -236,8 +236,8 @@ public class Tomcat {
      * {@link #setAddDefaultWebXmlToWebapp(boolean)} with {@code false}. Any
      * <code>WEB-INF/web.xml</code> and <code>META-INF/context.xml</code>
      * packaged with the application will always be processed and normal web
-     * fragment and {@link javax.servlet.ServletContainerInitializer} processing
-     * will always be applied.
+     * fragment and {@link jakarta.servlet.ServletContainerInitializer}
+     * processing will always be applied.
      *
      * @param contextPath The context mapping to use, "" for root context.
      * @param docBase     Base directory for the context, for static files. Must
@@ -306,11 +306,11 @@ public class Tomcat {
      * that there is no JSP support (no JSP servlet), no default servlet and
      * no web socket support unless explicitly enabled via the programmatic
      * interface. There is also no
-     * {@link javax.servlet.ServletContainerInitializer} processing and no
+     * {@link jakarta.servlet.ServletContainerInitializer} processing and no
      * annotation processing. If a
-     * {@link javax.servlet.ServletContainerInitializer} is added
+     * {@link jakarta.servlet.ServletContainerInitializer} is added
      * programmatically, there will still be no scanning for
-     * {@link javax.servlet.annotation.HandlesTypes} matches.
+     * {@link jakarta.servlet.annotation.HandlesTypes} matches.
      *
      * <p>
      * API calls equivalent with web.xml:
@@ -714,7 +714,7 @@ public class Tomcat {
      * {@link #setAddDefaultWebXmlToWebapp(boolean)} with {@code false}. Any
      * <code>WEB-INF/web.xml</code> and <code>META-INF/context.xml</code>
      * packaged with the application will always be processed and normal web
-     * fragment and {@link javax.servlet.ServletContainerInitializer} processing
+     * fragment and {@link jakarta.servlet.ServletContainerInitializer} processing
      * will always be applied.
      *
      * @param host        The host in which the context will be deployed
@@ -747,7 +747,7 @@ public class Tomcat {
      * {@link #setAddDefaultWebXmlToWebapp(boolean)} with {@code false}. Any
      * <code>WEB-INF/web.xml</code> and <code>META-INF/context.xml</code>
      * packaged with the application will always be processed and normal web
-     * fragment and {@link javax.servlet.ServletContainerInitializer} processing
+     * fragment and {@link jakarta.servlet.ServletContainerInitializer} processing
      * will always be applied.
      *
      * @param host        The host in which the context will be deployed
@@ -839,7 +839,7 @@ public class Tomcat {
             if (p == null) {
                 String pass = userPass.get(username);
                 if (pass != null) {
-                    p = new GenericPrincipal(username, pass,
+                    p = new GenericPrincipal(username,
                             userRoles.get(username));
                     userPrincipals.put(username, p);
                 }
@@ -1162,11 +1162,8 @@ public class Tomcat {
                 if (event.getType().equals(Lifecycle.CONFIGURE_START_EVENT)) {
                     context.setConfigured(true);
 
-                    // Process annotations when not running in a Graal image
-                    // annotations require reflections and additional configuration
-                    if (!JreCompat.isGraalAvailable()) {
-                        WebAnnotationSet.loadApplicationAnnotations(context);
-                    }
+                    // Process annotations
+                    WebAnnotationSet.loadApplicationAnnotations(context);
 
                     // LoginConfig is required to process @ServletSecurity
                     // annotations
@@ -1207,7 +1204,7 @@ public class Tomcat {
         @SuppressWarnings("deprecation")
         public ExistingStandardWrapper( Servlet existing ) {
             this.existing = existing;
-            if (existing instanceof javax.servlet.SingleThreadModel) {
+            if (existing instanceof jakarta.servlet.SingleThreadModel) {
                 singleThreadModel = true;
                 instancePool = new Stack<>();
             }

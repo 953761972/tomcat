@@ -17,6 +17,8 @@
 package org.apache.tomcat.buildutil.translate;
 
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -39,17 +41,17 @@ public class BackportTranslations extends BackportBase {
 
     @Override
     protected void execute() throws IOException {
-        for (String language : targetTranslations.keySet()) {
+        for (String langauge : targetTranslations.keySet()) {
             // Skip source
-            if (language.length() == 0) {
+            if (langauge.length() == 0) {
                 continue;
             }
 
-            Properties sourceTranslated = sourceTranslations.get(language);
-            Properties targetTranslated = targetTranslations.get(language);
+            Properties sourceTranslated = sourceTranslations.get(langauge);
+            Properties targetTranslated = targetTranslations.get(langauge);
             if (targetTranslated == null) {
                 targetTranslated = new Properties();
-                targetTranslations.put(language, targetTranslated);
+                targetTranslations.put(langauge, targetTranslated);
             }
 
             for (Object key : targetEnglish.keySet()) {
@@ -61,8 +63,14 @@ public class BackportTranslations extends BackportBase {
             }
 
             // Remove translated values for keys that have been removed
-            targetTranslated.entrySet().removeIf(entry -> !targetEnglish.containsKey(entry.getKey()));
-            Utils.export(language, targetTranslated, storageDir);
+            Iterator<Map.Entry<Object,Object>> iter = targetTranslated.entrySet().iterator();
+            while (iter.hasNext()) {
+                Map.Entry<Object,Object> entry = iter.next();
+                if (!targetEnglish.containsKey(entry.getKey())) {
+                    iter.remove();
+                }
+            }
+            Utils.export(langauge, targetTranslated, storageDir);
         }
     }
 }

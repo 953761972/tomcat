@@ -52,7 +52,12 @@ public class ClassLoaderLogManager extends LogManager {
 
     private static final boolean isJava9;
 
-    private static ThreadLocal<Boolean> addingLocalRootLogger = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static ThreadLocal<Boolean> addingLocalRootLogger = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
 
     public static final String DEBUG_PROPERTY =
             ClassLoaderLogManager.class.getName() + ".debug";
@@ -157,9 +162,12 @@ public class ClassLoaderLogManager extends LogManager {
         final String levelString = getProperty(loggerName + ".level");
         if (levelString != null) {
             try {
-                AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
-                    logger.setLevel(Level.parse(levelString.trim()));
-                    return null;
+                AccessController.doPrivileged(new PrivilegedAction<Void>() {
+                    @Override
+                    public Void run() {
+                        logger.setLevel(Level.parse(levelString.trim()));
+                        return null;
+                    }
                 });
             } catch (IllegalArgumentException e) {
                 // Leave level set to null
@@ -414,13 +422,16 @@ public class ClassLoaderLogManager extends LogManager {
         ClassLoaderLogInfo info = classLoaderLoggers.get(classLoader);
         if (info == null) {
             final ClassLoader classLoaderParam = classLoader;
-            AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
-                try {
-                    readConfiguration(classLoaderParam);
-                } catch (IOException e) {
-                    // Ignore
+            AccessController.doPrivileged(new PrivilegedAction<Void>() {
+                @Override
+                public Void run() {
+                    try {
+                        readConfiguration(classLoaderParam);
+                    } catch (IOException e) {
+                        // Ignore
+                    }
+                    return null;
                 }
-                return null;
             });
             info = classLoaderLoggers.get(classLoader);
         }
@@ -615,9 +626,12 @@ public class ClassLoaderLogManager extends LogManager {
      */
     protected static void doSetParentLogger(final Logger logger,
             final Logger parent) {
-        AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
-            logger.setParent(parent);
-            return null;
+        AccessController.doPrivileged(new PrivilegedAction<Void>() {
+            @Override
+            public Void run() {
+                logger.setParent(parent);
+                return null;
+            }
         });
     }
 

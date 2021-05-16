@@ -39,6 +39,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLSession;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -83,19 +84,6 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
      * Bytebuffer cache, each channel holds a set of buffers (two, except for SSL holds four)
      */
     private SynchronizedStack<Nio2Channel> nioChannels;
-
-    // ------------------------------------------------------------- Properties
-
-
-    /**
-     * Is deferAccept supported?
-     */
-    @Override
-    public boolean getDeferAccept() {
-        // Not supported
-        return false;
-    }
-
 
     // --------------------------------------------------------- Public Methods
 
@@ -157,11 +145,12 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
                 processorCache = new SynchronizedStack<>(SynchronizedStack.DEFAULT_SIZE,
                         socketProperties.getProcessorCache());
             }
-            if (socketProperties.getBufferPool() != 0) {
+            int actualBufferPool =
+                    socketProperties.getActualBufferPool(isSSLEnabled() ? getSniParseLimit() * 2 : 0);
+            if (actualBufferPool != 0) {
                 nioChannels = new SynchronizedStack<>(SynchronizedStack.DEFAULT_SIZE,
-                        socketProperties.getBufferPool());
+                        actualBufferPool);
             }
-
             // Create worker collection
             if (getExecutor() == null) {
                 createExecutor();
@@ -203,19 +192,22 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
         }
         if (running) {
             running = false;
-            acceptor.stop(10);
+            acceptor.stop();
             // Use the executor to avoid binding the main thread if something bad
             // occurs and unbind will also wait for a bit for it to complete
-            getExecutor().execute(() -> {
-                // Then close all active connections if any remain
-                try {
-                    for (SocketWrapperBase<Nio2Channel> wrapper : getConnections()) {
-                        wrapper.close();
+            getExecutor().execute(new Runnable() {
+                @Override
+                public void run() {
+                    // Then close all active connections if any remain
+                    try {
+                        for (SocketWrapperBase<Nio2Channel> wrapper : getConnections()) {
+                            wrapper.close();
+                        }
+                    } catch (Throwable t) {
+                        ExceptionUtils.handleThrowable(t);
+                    } finally {
+                        allClosed = true;
                     }
-                } catch (Throwable t) {
-                    ExceptionUtils.handleThrowable(t);
-                } finally {
-                    allClosed = true;
                 }
             });
             if (nioChannels != null) {
@@ -415,14 +407,8 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
             }
         }
 
-        /**
-         * Signals the Acceptor to stop.
-         *
-         * @param waitSeconds Ignored for NIO2.
-         *
-         */
         @Override
-        public void stop(int waitSeconds) {
+        public void stop() {
             acceptor.state = AcceptorState.ENDED;
         }
 
@@ -435,14 +421,6 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
             // Configure the socket
             if (isRunning() && !isPaused()) {
                 if (getMaxConnections() == -1) {
-                    serverSock.accept(null, this);
-                } else if (getConnectionCount() < getMaxConnections()) {
-                    try {
-                        // This will not block
-                        countUpOrAwaitConnection();
-                    } catch (InterruptedException e) {
-                        // Ignore
-                    }
                     serverSock.accept(null, this);
                 } else {
                     // Accept again on a new thread since countUpOrAwaitConnection may block
@@ -1337,44 +1315,6 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
 
 
         @Override
-        public boolean awaitReadComplete(long timeout, TimeUnit unit) {
-            synchronized (readCompletionHandler) {
-                try {
-                    if (readNotify) {
-                        return true;
-                    } else if (readPending.tryAcquire(timeout, unit)) {
-                        readPending.release();
-                        return true;
-                    } else {
-                        return false;
-                    }
-                } catch (InterruptedException e) {
-                    return false;
-                }
-            }
-        }
-
-
-        @Override
-        public boolean awaitWriteComplete(long timeout, TimeUnit unit) {
-            synchronized (writeCompletionHandler) {
-                try {
-                    if (writeNotify) {
-                        return true;
-                    } else if (writePending.tryAcquire(timeout, unit)) {
-                        writePending.release();
-                        return true;
-                    } else {
-                        return false;
-                    }
-                } catch (InterruptedException e) {
-                    return false;
-                }
-            }
-        }
-
-
-        @Override
         public void registerReadInterest() {
             synchronized (readCompletionHandler) {
                 // A notification is already being sent
@@ -1589,7 +1529,11 @@ public class Nio2Endpoint extends AbstractJsseEndpoint<Nio2Channel,AsynchronousS
         public SSLSupport getSslSupport(String clientCertProvider) {
             if (getSocket() instanceof SecureNio2Channel) {
                 SecureNio2Channel ch = (SecureNio2Channel) getSocket();
-                return ch.getSSLSupport();
+                SSLEngine sslEngine = ch.getSslEngine();
+                if (sslEngine != null) {
+                    SSLSession session = sslEngine.getSession();
+                    return ((Nio2Endpoint) getEndpoint()).getSslImplementation().getSSLSupport(session);
+                }
             }
             return null;
         }

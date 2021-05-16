@@ -23,15 +23,15 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Vector;
 
-import javax.el.MethodExpression;
-import javax.el.ValueExpression;
-import javax.servlet.jsp.tagext.JspFragment;
-import javax.servlet.jsp.tagext.TagAttributeInfo;
-import javax.servlet.jsp.tagext.TagFileInfo;
-import javax.servlet.jsp.tagext.TagInfo;
-import javax.servlet.jsp.tagext.TagLibraryInfo;
-import javax.servlet.jsp.tagext.TagVariableInfo;
-import javax.servlet.jsp.tagext.VariableInfo;
+import jakarta.el.MethodExpression;
+import jakarta.el.ValueExpression;
+import jakarta.servlet.jsp.tagext.JspFragment;
+import jakarta.servlet.jsp.tagext.TagAttributeInfo;
+import jakarta.servlet.jsp.tagext.TagFileInfo;
+import jakarta.servlet.jsp.tagext.TagInfo;
+import jakarta.servlet.jsp.tagext.TagLibraryInfo;
+import jakarta.servlet.jsp.tagext.TagVariableInfo;
+import jakarta.servlet.jsp.tagext.VariableInfo;
 
 import org.apache.jasper.JasperException;
 import org.apache.jasper.JspCompilationContext;
@@ -348,7 +348,7 @@ class TagFileProcessor {
                     nameFromAttribute, className, declare, scope));
         }
 
-        public TagInfo getTagInfo() throws JasperException {
+        public TagInfo getTagInfo(String packageName) throws JasperException {
 
             if (name == null) {
                 // XXX Get it from tag file name
@@ -359,7 +359,7 @@ class TagFileProcessor {
             }
 
             String tagClassName = JspUtil.getTagHandlerClassName(
-                    path, tagLibInfo.getReliableURN(), err);
+                    path, packageName, tagLibInfo.getReliableURN(), err);
 
             TagVariableInfo[] tagVariableInfos = new TagVariableInfo[variableVector
                     .size()];
@@ -506,7 +506,7 @@ class TagFileProcessor {
         page.visit(tagFileVisitor);
         tagFileVisitor.postCheck();
 
-        return tagFileVisitor.getTagInfo();
+        return tagFileVisitor.getTagInfo(pc.getJspCompilationContext().getOptions().getGeneratedTagFilePackageName());
     }
 
     /**

@@ -19,16 +19,14 @@ package org.apache.tomcat.websocket;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import javax.websocket.OnClose;
-import javax.websocket.OnError;
-import javax.websocket.OnMessage;
-import javax.websocket.OnOpen;
-import javax.websocket.RemoteEndpoint.Basic;
-import javax.websocket.Session;
-import javax.websocket.server.ServerEndpoint;
+import jakarta.websocket.OnClose;
+import jakarta.websocket.OnError;
+import jakarta.websocket.OnMessage;
+import jakarta.websocket.OnOpen;
+import jakarta.websocket.RemoteEndpoint.Basic;
+import jakarta.websocket.Session;
+import jakarta.websocket.server.ServerEndpoint;
 
-import org.apache.juli.logging.Log;
-import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.websocket.server.TesterEndpointConfig;
 
 /**
@@ -43,8 +41,6 @@ public class TesterFirehoseServer {
     public static final int WAIT_TIME_MILLIS = 300000;
     public static final int SEND_TIME_OUT_MILLIS = 5000;
 
-    public static final String PATH = "/firehose";
-
     static {
         StringBuilder sb = new StringBuilder(MESSAGE_SIZE);
         for (int i = 0; i < MESSAGE_SIZE; i++) {
@@ -54,30 +50,22 @@ public class TesterFirehoseServer {
     }
 
 
-    public static class ConfigInline extends TesterEndpointConfig {
+    public static class Config extends TesterEndpointConfig {
+
+        public static final String PATH = "/firehose";
 
         @Override
         protected Class<?> getEndpointClass() {
-            return EndpointInline.class;
+            return Endpoint.class;
         }
     }
 
 
-    public static class ConfigThread extends TesterEndpointConfig {
+    @ServerEndpoint(Config.PATH)
+    public static class Endpoint {
 
-        @Override
-        protected Class<?> getEndpointClass() {
-            return EndpointThread.class;
-        }
-    }
-
-
-    public abstract static class Endpoint {
-
-        private static final AtomicInteger openConnectionCount = new AtomicInteger(0);
-        private static final AtomicInteger errorCount = new AtomicInteger(0);
-
-        private final boolean inline;
+        private static AtomicInteger openConnectionCount = new AtomicInteger(0);
+        private static AtomicInteger errorCount = new AtomicInteger(0);
 
         private volatile boolean started = false;
 
@@ -87,10 +75,6 @@ public class TesterFirehoseServer {
 
         public static int getErrorCount() {
             return errorCount.intValue();
-        }
-
-        public Endpoint(boolean inline) {
-            this.inline = inline;
         }
 
         @OnOpen
@@ -114,48 +98,6 @@ public class TesterFirehoseServer {
 
             System.out.println("Received " + msg + ", now sending data");
 
-            Writer writer = new Writer(session);
-
-            if (inline) {
-                writer.doRun();
-            } else {
-                Thread t = new Thread(writer);
-                t.start();
-            }
-        }
-
-        @OnError
-        public void onError(@SuppressWarnings("unused") Throwable t) {
-            errorCount.incrementAndGet();
-        }
-
-        @OnClose
-        public void onClose() {
-            openConnectionCount.decrementAndGet();
-        }
-    }
-
-
-    private static class Writer implements Runnable {
-
-        private static final Log log = LogFactory.getLog(Writer.class);
-
-        private final Session session;
-
-        public Writer(Session session) {
-            this.session = session;
-        }
-
-        @Override
-        public void run() {
-            try {
-                doRun();
-            } catch (IOException ioe) {
-                log.error("Error on non-container thread", ioe);
-            }
-        }
-
-        public void doRun() throws IOException {
             session.getUserProperties().put(
                     org.apache.tomcat.websocket.Constants.BLOCKING_SEND_TIMEOUT_PROPERTY,
                     Long.valueOf(SEND_TIME_OUT_MILLIS));
@@ -174,22 +116,15 @@ public class TesterFirehoseServer {
             // Flushing should happen automatically on session close
             session.close();
         }
-    }
 
-    @ServerEndpoint(PATH)
-    public static class EndpointInline extends Endpoint {
-
-        public EndpointInline() {
-            super(true);
+        @OnError
+        public void onError(@SuppressWarnings("unused") Throwable t) {
+            errorCount.incrementAndGet();
         }
-    }
 
-
-    @ServerEndpoint(PATH)
-    public static class EndpointThread extends Endpoint {
-
-        public EndpointThread() {
-            super(false);
+        @OnClose
+        public void onClose() {
+            openConnectionCount.decrementAndGet();
         }
     }
 }

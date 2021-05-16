@@ -30,6 +30,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import org.apache.catalina.connector.Connector;
+import org.apache.coyote.http11.AbstractHttp11Protocol;
 import org.apache.coyote.http2.HpackEncoder.State;
 import org.apache.tomcat.util.http.MimeHeaders;
 import org.apache.tomcat.util.res.StringManager;
@@ -37,39 +38,6 @@ import org.apache.tomcat.util.res.StringManager;
 public class TestHttp2Limits extends Http2TestBase {
 
     private static final StringManager sm = StringManager.getManager(TestHttp2Limits.class);
-
-
-    @Test
-    public void testSettingsOverheadLimits() throws Exception {
-        http2Connect(false);
-
-        for (int i = 0; i < 100; i++) {
-            try {
-                sendSettings(0, false);
-                parser.readFrame(true);
-            } catch (IOException ioe) {
-                // Server closed connection before client has a chance to read
-                // the Goaway frame. Treat this as a pass.
-                return;
-            }
-            String trace = output.getTrace();
-            if (trace.equals("0-Settings-Ack\n")) {
-                // Test continues
-                output.clearTrace();
-            } else if (trace.startsWith("0-Goaway-[1]-[11]-[Connection [")) {
-                // Test passed
-                return;
-            } else {
-                // Test failed
-                Assert.fail("Unexpected output: " + output.getTrace());
-            }
-            Thread.sleep(100);
-        }
-
-        // Test failed
-        Assert.fail("Connection not closed down");
-    }
-
 
     @Test
     public void testHeaderLimits1x128() throws Exception {
@@ -228,11 +196,11 @@ public class TestHttp2Limits extends Http2TestBase {
         }
 
         enableHttp2();
+        configureAndStartWebApplication();
 
         http2Protocol.setMaxHeaderCount(maxHeaderCount);
-        http2Protocol.setMaxHeaderSize(maxHeaderSize);
+        ((AbstractHttp11Protocol<?>) http2Protocol.getHttp11Protocol()).setMaxHttpHeaderSize(maxHeaderSize);
 
-        configureAndStartWebApplication();
         openClientConnection();
         doHttpUpgrade();
         sendClientPreface();
@@ -470,12 +438,12 @@ public class TestHttp2Limits extends Http2TestBase {
     private void doTestPostWithTrailerHeaders(int maxTrailerCount, int maxTrailerSize,
             FailureMode failMode) throws Exception {
         enableHttp2();
-
-        http2Protocol.setAllowedTrailerHeaders(TRAILER_HEADER_NAME);
-        http2Protocol.setMaxTrailerCount(maxTrailerCount);
-        http2Protocol.setMaxTrailerSize(maxTrailerSize);
-
         configureAndStartWebApplication();
+
+        ((AbstractHttp11Protocol<?>) http2Protocol.getHttp11Protocol()).setAllowedTrailerHeaders(TRAILER_HEADER_NAME);
+        http2Protocol.setMaxTrailerCount(maxTrailerCount);
+        ((AbstractHttp11Protocol<?>) http2Protocol.getHttp11Protocol()).setMaxTrailerSize(maxTrailerSize);
+
         openClientConnection();
         doHttpUpgrade();
         sendClientPreface();
@@ -524,13 +492,6 @@ public class TestHttp2Limits extends Http2TestBase {
         case STREAM_RESET: {
             // NIO2 can sometimes send window updates depending timing
             skipWindowSizeFrames();
-
-            // Async I/O can sometimes result in a stream closed reset before
-            // the enhance your calm reset
-            if ("3-RST-[5]\n".equals(output.getTrace())) {
-                output.clearTrace();
-                parser.readFrame(true);
-            }
 
             Assert.assertEquals("3-RST-[11]\n", output.getTrace());
             break;

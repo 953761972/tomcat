@@ -74,7 +74,7 @@ public class NamingContext implements Context {
      * @param name The name of the associated Catalina Context
      */
     public NamingContext(Hashtable<String,Object> env, String name) {
-        this(env, name, new HashMap<>());
+        this(env, name, new HashMap<String,NamingEntry>());
     }
 
 
@@ -872,9 +872,6 @@ public class NamingContext implements Context {
                             entry.type = NamingEntry.ENTRY;
                             entry.value = obj;
                         }
-                    }
-                    if (obj == null) {
-                        throw new NamingException(sm.getString("namingContext.failResolvingReference"));
                     }
                     return obj;
                 } catch (NamingException e) {

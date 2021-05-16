@@ -27,7 +27,7 @@ import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.servlet.ServletContext;
+import jakarta.servlet.ServletContext;
 
 import org.apache.catalina.Context;
 import org.apache.catalina.Globals;
@@ -351,7 +351,7 @@ public final class FileStore extends StoreBase {
         File file = new File(storageDir, filename);
 
         // Check the file is within the storage directory
-        if (!file.getCanonicalFile().toPath().startsWith(storageDir.getCanonicalFile().toPath())) {
+        if (!file.getCanonicalPath().startsWith(storageDir.getCanonicalPath())) {
             log.warn(sm.getString("fileStore.invalid", file.getPath(), id));
             return null;
         }

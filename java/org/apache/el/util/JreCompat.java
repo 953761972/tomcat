@@ -22,7 +22,7 @@ import java.lang.reflect.AccessibleObject;
  * This is a cut down version of org.apache.tomcat.util.JreCompat that provides
  * only the methods required by the EL implementation.
  *
- * This class is duplicated in javax.el
+ * This class is duplicated in jakarta.el
  * When making changes keep the two in sync.
  */
 public class JreCompat {
@@ -53,7 +53,7 @@ public class JreCompat {
      * @return {code true} if the AccessibleObject can be accessed otherwise
      *         {code false}
      */
-    public boolean canAccess(Object base, AccessibleObject accessibleObject) {
+    public boolean canAcccess(Object base, AccessibleObject accessibleObject) {
         // Java 8 doesn't support modules so default to true
         return true;
     }

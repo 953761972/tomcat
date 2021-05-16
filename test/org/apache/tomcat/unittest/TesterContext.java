@@ -24,15 +24,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.management.ObjectName;
-import javax.servlet.ServletContainerInitializer;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletRegistration.Dynamic;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletSecurityElement;
-import javax.servlet.descriptor.JspConfigDescriptor;
+
+import jakarta.servlet.ServletContainerInitializer;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletRegistration.Dynamic;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletSecurityElement;
+import jakarta.servlet.descriptor.JspConfigDescriptor;
 
 import org.apache.catalina.AccessLog;
 import org.apache.catalina.Authenticator;
@@ -362,6 +362,11 @@ public class TesterContext implements Context {
     @Override
     public void setApplicationLifecycleListeners(Object[] listeners) {
         // NO-OP
+    }
+
+    @Override
+    public String getCharset(Locale locale) {
+        return null;
     }
 
     @Override
@@ -734,24 +739,9 @@ public class TesterContext implements Context {
         // NO-OP
     }
 
-    private final Map<String,String> localEncodingMap = new ConcurrentHashMap<>();
-
     @Override
     public void addLocaleEncodingMappingParameter(String locale, String encoding) {
-        localEncodingMap.put(locale, encoding);
-    }
-    @Override
-    public String getCharset(Locale locale) {
-        // Match full language_country_variant first, then language_country,
-        // then language only
-        String charset = localEncodingMap.get(locale.toString());
-        if (charset == null) {
-            charset = localEncodingMap.get(locale.getLanguage() + "_" + locale.getCountry());
-            if (charset == null) {
-                charset = localEncodingMap.get(locale.getLanguage());
-            }
-        }
-        return charset;
+        // NO-OP
     }
 
     @Override
@@ -821,11 +811,6 @@ public class TesterContext implements Context {
     }
 
     @Override
-    public ErrorPage findErrorPage(String exceptionType) {
-        return null;
-    }
-
-    @Override
     public ErrorPage findErrorPage(Throwable exceptionType) {
         return null;
     }
@@ -882,16 +867,6 @@ public class TesterContext implements Context {
 
     @Override
     public String[] findServletMappings() {
-        return null;
-    }
-
-    @Override
-    public String findStatusPage(int status) {
-        return null;
-    }
-
-    @Override
-    public int[] findStatusPages() {
         return null;
     }
 
@@ -1301,14 +1276,18 @@ public class TesterContext implements Context {
     public boolean getCreateUploadTargets() { return false; }
 
     @Override
-    public boolean getParallelAnnotationScanning() { return false; }
+    public boolean getAlwaysAccessSession() { return false; }
     @Override
-    public void setParallelAnnotationScanning(boolean parallelAnnotationScanning) {}
+    public void setAlwaysAccessSession(boolean alwaysAccessSession) {}
 
     @Override
-    public boolean getUseBloomFilterForArchives() { return false; }
+    public boolean getContextGetResourceRequiresSlash() { return false; }
+    @Override
+    public void setContextGetResourceRequiresSlash(boolean contextGetResourceRequiresSlash) {}
 
     @Override
-    public void setUseBloomFilterForArchives(boolean useBloomFilterForArchives) {}
+    public boolean getDispatcherWrapsSameObject() { return false; }
+    @Override
+    public void setDispatcherWrapsSameObject(boolean dispatcherWrapsSameObject) {}
 
 }

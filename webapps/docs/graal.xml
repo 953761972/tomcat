@@ -23,7 +23,7 @@
     &project;
 
   <properties>
-    <title>Ahead of Time compilation support</title>
+    <title>GraalVM support</title>
   </properties>
 
 <body>
@@ -128,7 +128,6 @@ mvn package</source>
     Run the GraalVM substrate VM using the trace agent:
     <source>$JAVA_HOME/bin/java\
         -agentlib:native-image-agent=config-output-dir=$TOMCAT_STUFFED/target/\
-        -Dorg.graalvm.nativeimage.imagecode=agent\
         -Dcatalina.base=. -Djava.util.logging.config.file=conf/logging.properties\
         -jar target/tomcat-stuffed-1.0.jar --catalina -useGeneratedCode</source>
   </p>
@@ -158,7 +157,7 @@ mvn package</source>
     using the native-image tool.
     <source>$JAVA_HOME/bin/native-image --no-server\
         --allow-incomplete-classpath --enable-https\
-        --initialize-at-build-time=org.eclipse.jdt,org.apache.el.parser.SimpleNode,javax.servlet.jsp.JspFactory,org.apache.jasper.servlet.JasperInitializer,org.apache.jasper.runtime.JspFactoryImpl\
+        --initialize-at-build-time=org.eclipse.jdt,org.apache.el.parser.SimpleNode,jakarta.servlet.jsp.JspFactory,org.apache.jasper.servlet.JasperInitializer,org.apache.jasper.runtime.JspFactoryImpl\
         -H:+JNI -H:+ReportUnsupportedElementsAtRuntime\
         -H:+ReportExceptionStackTraces -H:EnableURLProtocols=http,https,jar,jrt\
         -H:ConfigurationFileDirectories=$TOMCAT_STUFFED/target/\
@@ -201,6 +200,9 @@ mvn package</source>
   <p>
     Missing items for better Tomcat functionality:
     <ul>
+      <li><a href="https://github.com/oracle/graal/issues/460">Java
+        serialization</a>: Clustering and session persistence are not
+        functional</li>
       <li><a href="https://github.com/oracle/graal/issues/2103">JMX</a>:
         The usual monitoring and management is not usable</li>
       <li>java.util.logging LogManager: Configuration through a system property

@@ -368,24 +368,30 @@ public class McastServiceImpl extends MembershipProviderBase {
         if (Arrays.equals(m.getCommand(), Member.SHUTDOWN_PAYLOAD)) {
             if (log.isDebugEnabled()) log.debug("Member has shutdown:" + m);
             membership.removeMember(m);
-            t = () -> {
-                String name = Thread.currentThread().getName();
-                try {
-                    Thread.currentThread().setName("Membership-MemberDisappeared");
-                    service.memberDisappeared(m);
-                }finally {
-                    Thread.currentThread().setName(name);
+            t = new Runnable() {
+                @Override
+                public void run() {
+                    String name = Thread.currentThread().getName();
+                    try {
+                        Thread.currentThread().setName("Membership-MemberDisappeared.");
+                        service.memberDisappeared(m);
+                    }finally {
+                        Thread.currentThread().setName(name);
+                    }
                 }
             };
         } else if (membership.memberAlive(m)) {
             if (log.isDebugEnabled()) log.debug("Mcast add member " + m);
-            t = () -> {
-                String name = Thread.currentThread().getName();
-                try {
-                    Thread.currentThread().setName("Membership-MemberAdded");
-                    service.memberAdded(m);
-                }finally {
-                    Thread.currentThread().setName(name);
+            t = new Runnable() {
+                @Override
+                public void run() {
+                    String name = Thread.currentThread().getName();
+                    try {
+                        Thread.currentThread().setName("Membership-MemberAdded.");
+                        service.memberAdded(m);
+                    }finally {
+                        Thread.currentThread().setName(name);
+                    }
                 }
             };
         } //end if
@@ -407,27 +413,30 @@ public class McastServiceImpl extends MembershipProviderBase {
                     log.debug("Unable to decode message.",ise);
                 }
             }
-            Runnable t = () -> {
-                String name = Thread.currentThread().getName();
-                try {
-                    Thread.currentThread().setName("Membership-MemberAdded");
-                    for (ChannelData datum : data) {
-                        try {
-                            if (datum != null && !member.equals(datum.getAddress())) {
-                                msgservice.messageReceived(datum);
+            Runnable t = new Runnable() {
+                @Override
+                public void run() {
+                    String name = Thread.currentThread().getName();
+                    try {
+                        Thread.currentThread().setName("Membership-MemberAdded.");
+                        for (ChannelData datum : data) {
+                            try {
+                                if (datum != null && !member.equals(datum.getAddress())) {
+                                    msgservice.messageReceived(datum);
+                                }
+                            } catch (Throwable t) {
+                                if (t instanceof ThreadDeath) {
+                                    throw (ThreadDeath) t;
+                                }
+                                if (t instanceof VirtualMachineError) {
+                                    throw (VirtualMachineError) t;
+                                }
+                                log.error(sm.getString("mcastServiceImpl.unableReceive.broadcastMessage"), t);
                             }
-                        } catch (Throwable t1) {
-                            if (t1 instanceof ThreadDeath) {
-                                throw (ThreadDeath) t1;
-                            }
-                            if (t1 instanceof VirtualMachineError) {
-                                throw (VirtualMachineError) t1;
-                            }
-                            log.error(sm.getString("mcastServiceImpl.unableReceive.broadcastMessage"), t1);
                         }
+                    }finally {
+                        Thread.currentThread().setName(name);
                     }
-                }finally {
-                    Thread.currentThread().setName(name);
                 }
             };
             executor.execute(t);
@@ -442,13 +451,17 @@ public class McastServiceImpl extends MembershipProviderBase {
                 if (log.isDebugEnabled())
                     log.debug("Mcast expire  member " + member);
                 try {
-                    Runnable t = () -> {
-                        String name = Thread.currentThread().getName();
-                        try {
-                            Thread.currentThread().setName("Membership-MemberExpired");
-                            service.memberDisappeared(member);
-                        } finally {
-                            Thread.currentThread().setName(name);
+                    Runnable t = new Runnable() {
+                        @Override
+                        public void run() {
+                            String name = Thread.currentThread().getName();
+                            try {
+                                Thread.currentThread().setName("Membership-MemberExpired.");
+                                service.memberDisappeared(member);
+                            } finally {
+                                Thread.currentThread().setName(name);
+                            }
+
                         }
                     };
                     executor.execute(t);

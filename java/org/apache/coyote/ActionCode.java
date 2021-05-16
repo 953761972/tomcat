@@ -77,11 +77,6 @@ public enum ActionCode {
     REQ_HOST_ADDR_ATTRIBUTE,
 
     /**
-     * Callback for lazy evaluation - extract the connection peer address.
-     */
-    REQ_PEER_ADDR_ATTRIBUTE,
-
-    /**
      * Callback for lazy evaluation - extract the SSL-related attributes
      * including the client certificate if present.
      */
@@ -130,7 +125,7 @@ public enum ActionCode {
 
     /**
      * Callback for an async call to
-     * {@link javax.servlet.AsyncContext#dispatch()}.
+     * {@link jakarta.servlet.AsyncContext#dispatch()}.
      */
     ASYNC_DISPATCH,
 
@@ -142,13 +137,13 @@ public enum ActionCode {
 
     /**
      * Callback for an async call to
-     * {@link javax.servlet.AsyncContext#start(Runnable)}.
+     * {@link jakarta.servlet.AsyncContext#start(Runnable)}.
      */
     ASYNC_RUN,
 
     /**
      * Callback for an async call to
-     * {@link javax.servlet.AsyncContext#complete()}.
+     * {@link jakarta.servlet.AsyncContext#complete()}.
      */
     ASYNC_COMPLETE,
 
@@ -164,7 +159,7 @@ public enum ActionCode {
 
     /**
      * Callback for an async call to
-     * {@link javax.servlet.AsyncContext#setTimeout(long)}
+     * {@link jakarta.servlet.AsyncContext#setTimeout(long)}
      */
     ASYNC_SETTIMEOUT,
 

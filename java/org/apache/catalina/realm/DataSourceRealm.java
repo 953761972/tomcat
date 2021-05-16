@@ -33,7 +33,7 @@ import org.apache.naming.ContextBindings;
 /**
 *
 * Implementation of <b>Realm</b> that works with any JDBC JNDI DataSource.
-* See the Realm How-To for more details on how to set up the database and
+* See the JDBCRealm.howto for more details on how to set up the database and
 * for configuration options.
 *
 * @author Glenn L. Nielsen
@@ -334,7 +334,7 @@ public class DataSourceRealm extends RealmBase {
         ArrayList<String> list = getRoles(dbConnection, username);
 
         // Create and return a suitable Principal for this user
-        return new GenericPrincipal(username, credentials, list);
+        return new GenericPrincipal(username, list);
     }
 
 
@@ -455,11 +455,10 @@ public class DataSourceRealm extends RealmBase {
     protected Principal getPrincipal(String username) {
         Connection dbConnection = open();
         if (dbConnection == null) {
-            return new GenericPrincipal(username, null, null);
+            return new GenericPrincipal(username, null);
         }
         try {
             return new GenericPrincipal(username,
-                    getPassword(dbConnection, username),
                     getRoles(dbConnection, username));
         } finally {
             close(dbConnection);

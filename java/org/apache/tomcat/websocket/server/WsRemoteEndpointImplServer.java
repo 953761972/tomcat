@@ -24,10 +24,9 @@ import java.nio.channels.CompletionHandler;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import javax.websocket.SendHandler;
-import javax.websocket.SendResult;
+import jakarta.websocket.SendHandler;
+import jakarta.websocket.SendResult;
 
-import org.apache.coyote.http11.upgrade.UpgradeInfo;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.net.SocketWrapperBase;
@@ -37,7 +36,7 @@ import org.apache.tomcat.websocket.Transformation;
 import org.apache.tomcat.websocket.WsRemoteEndpointImplBase;
 
 /**
- * This is the server side {@link javax.websocket.RemoteEndpoint} implementation
+ * This is the server side {@link jakarta.websocket.RemoteEndpoint} implementation
  * - i.e. what the server uses to send data to the client.
  */
 public class WsRemoteEndpointImplServer extends WsRemoteEndpointImplBase {
@@ -47,17 +46,15 @@ public class WsRemoteEndpointImplServer extends WsRemoteEndpointImplBase {
     private final Log log = LogFactory.getLog(WsRemoteEndpointImplServer.class); // must not be static
 
     private final SocketWrapperBase<?> socketWrapper;
-    private final UpgradeInfo upgradeInfo;
     private final WsWriteTimeout wsWriteTimeout;
     private volatile SendHandler handler = null;
     private volatile ByteBuffer[] buffers = null;
 
     private volatile long timeoutExpiry = -1;
 
-    public WsRemoteEndpointImplServer(SocketWrapperBase<?> socketWrapper, UpgradeInfo upgradeInfo,
+    public WsRemoteEndpointImplServer(SocketWrapperBase<?> socketWrapper,
             WsServerContainer serverContainer) {
         this.socketWrapper = socketWrapper;
-        this.upgradeInfo = upgradeInfo;
         this.wsWriteTimeout = serverContainer.getTimeout();
     }
 
@@ -154,13 +151,6 @@ public class WsRemoteEndpointImplServer extends WsRemoteEndpointImplBase {
                 }
             }
         }
-    }
-
-
-    @Override
-    protected void updateStats(long payloadLength) {
-        upgradeInfo.addMsgsSent(1);
-        upgradeInfo.addBytesSent(payloadLength);
     }
 
 
@@ -267,7 +257,7 @@ public class WsRemoteEndpointImplServer extends WsRemoteEndpointImplBase {
      * @param useDispatch   Should {@link SendHandler#onResult(SendResult)} be
      *                      called from a new thread, keeping in mind the
      *                      requirements of
-     *                      {@link javax.websocket.RemoteEndpoint.Async}
+     *                      {@link jakarta.websocket.RemoteEndpoint.Async}
      */
     private void clearHandler(Throwable t, boolean useDispatch) {
         // Setting the result marks this (partial) message as

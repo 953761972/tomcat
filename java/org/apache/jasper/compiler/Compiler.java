@@ -32,7 +32,6 @@ import java.util.Map.Entry;
 import org.apache.jasper.JasperException;
 import org.apache.jasper.JspCompilationContext;
 import org.apache.jasper.Options;
-import org.apache.jasper.TrimSpacesOption;
 import org.apache.jasper.servlet.JspServletWrapper;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -118,7 +117,7 @@ public abstract class Compiler {
 
         // Setup page info area
         pageInfo = new PageInfo(new BeanRepository(ctxt.getClassLoader(),
-                errDispatcher), ctxt.getJspFile(), ctxt.isTagFile());
+                errDispatcher), ctxt);
 
         JspConfig jspConfig = options.getJspConfig();
         JspConfig.JspProperty jspProperty = jspConfig.findJspProperty(ctxt
@@ -317,12 +316,7 @@ public abstract class Compiler {
                     javaEncoding);
         }
 
-        if ((ctxt!=null) && ctxt.getOptions().getTrimSpaces().equals(TrimSpacesOption.EXTENDED)) {
-            writer = new NewlineReductionServletWriter(new PrintWriter(osw));
-        } else {
-            writer = new ServletWriter(new PrintWriter(osw));
-        }
-
+        writer = new ServletWriter(new PrintWriter(osw));
         ctxt.setWriter(writer);
         return writer;
     }

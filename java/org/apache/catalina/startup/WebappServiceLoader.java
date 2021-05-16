@@ -27,12 +27,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import javax.servlet.ServletContext;
+import jakarta.servlet.ServletContext;
 
 import org.apache.catalina.Context;
 import org.apache.tomcat.util.scan.JarFactory;
@@ -55,7 +56,7 @@ import org.apache.tomcat.util.scan.JarFactory;
  *
  * @param <T> The type of service to load
  *
- * @see javax.servlet.ServletContainerInitializer
+ * @see jakarta.servlet.ServletContainerInitializer
  * @see java.util.ServiceLoader
  */
 public class WebappServiceLoader<T> {
@@ -123,7 +124,12 @@ public class WebappServiceLoader<T> {
 
         // Filter the discovered container SCIs if required
         if (containerSciFilterPattern != null) {
-            containerServiceClassNames.removeIf(s -> containerSciFilterPattern.matcher(s).find());
+            Iterator<String> iter = containerServiceClassNames.iterator();
+            while (iter.hasNext()) {
+                if (containerSciFilterPattern.matcher(iter.next()).find()) {
+                    iter.remove();
+                }
+            }
         }
 
         // Obtaining the application provided configuration files is a little

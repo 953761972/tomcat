@@ -31,15 +31,16 @@ import java.util.Stack;
 import java.util.TimeZone;
 import java.util.Vector;
 
-import javax.servlet.DispatcherType;
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.WebResource;
 import org.apache.catalina.connector.RequestFacade;
@@ -546,7 +547,11 @@ public class WebdavServlet extends DefaultServlet {
                         break;
                     }
                 }
-            } catch (SAXException | IOException e) {
+            } catch (SAXException e) {
+                // Something went wrong - bad request
+                resp.sendError(WebdavStatus.SC_BAD_REQUEST);
+                return;
+            } catch (IOException e) {
                 // Something went wrong - bad request
                 resp.sendError(WebdavStatus.SC_BAD_REQUEST);
                 return;
@@ -974,7 +979,9 @@ public class WebdavServlet extends DefaultServlet {
             // Get the root element of the document
             Element rootElement = document.getDocumentElement();
             lockInfoNode = rootElement;
-        } catch (IOException | SAXException e) {
+        } catch (IOException e) {
+            lockRequestType = LOCK_REFRESH;
+        } catch (SAXException e) {
             lockRequestType = LOCK_REFRESH;
         }
 
@@ -2493,7 +2500,7 @@ public class WebdavServlet extends DefaultServlet {
 
         @Override
         public InputSource resolveEntity (String publicId, String systemId) {
-            context.log(sm.getString("webdavservlet.externalEntityIgnored",
+            context.log(sm.getString("webdavservlet.enternalEntityIgnored",
                     publicId, systemId));
             return new InputSource(
                     new StringReader("Ignored external entity"));

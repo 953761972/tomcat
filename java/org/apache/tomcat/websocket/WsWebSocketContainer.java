@@ -54,26 +54,27 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
-import javax.websocket.ClientEndpoint;
-import javax.websocket.ClientEndpointConfig;
-import javax.websocket.CloseReason;
-import javax.websocket.CloseReason.CloseCodes;
-import javax.websocket.DeploymentException;
-import javax.websocket.Endpoint;
-import javax.websocket.Extension;
-import javax.websocket.HandshakeResponse;
-import javax.websocket.Session;
-import javax.websocket.WebSocketContainer;
+
+import jakarta.websocket.ClientEndpoint;
+import jakarta.websocket.ClientEndpointConfig;
+import jakarta.websocket.CloseReason;
+import jakarta.websocket.CloseReason.CloseCodes;
+import jakarta.websocket.DeploymentException;
+import jakarta.websocket.Endpoint;
+import jakarta.websocket.Extension;
+import jakarta.websocket.HandshakeResponse;
+import jakarta.websocket.Session;
+import jakarta.websocket.WebSocketContainer;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.InstanceManager;
-import org.apache.tomcat.InstanceManagerBindings;
 import org.apache.tomcat.util.buf.StringUtils;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.apache.tomcat.util.collections.CaseInsensitiveKeyMap;
 import org.apache.tomcat.util.res.StringManager;
 import org.apache.tomcat.util.security.KeyStoreUtil;
+import org.apache.tomcat.websocket.pojo.PojoEndpointClient;
 
 public class WsWebSocketContainer implements WebSocketContainer, BackgroundProcess {
 
@@ -105,11 +106,8 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
 
     private InstanceManager instanceManager;
 
-    protected InstanceManager getInstanceManager(ClassLoader classLoader) {
-        if (instanceManager  != null) {
-            return instanceManager;
-        }
-        return InstanceManagerBindings.get(classLoader);
+    InstanceManager getInstanceManager() {
+        return instanceManager;
     }
 
     protected void setInstanceManager(InstanceManager instanceManager) {
@@ -117,29 +115,18 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
     }
 
     @Override
-    public Session connectToServer(Object pojo, URI path) throws DeploymentException {
-        ClientEndpointConfig config = createClientEndpointConfig(pojo.getClass());
-        ClientEndpointHolder holder = new PojoHolder(pojo, config);
-        return connectToServerRecursive(holder, config, path, new HashSet<>());
-    }
-
-
-    @Override
-    public Session connectToServer(Class<?> annotatedEndpointClass, URI path) throws DeploymentException {
-        ClientEndpointConfig config = createClientEndpointConfig(annotatedEndpointClass);
-        ClientEndpointHolder holder = new PojoClassHolder(annotatedEndpointClass, config);
-        return connectToServerRecursive(holder, config, path, new HashSet<>());
-    }
-
-
-    private ClientEndpointConfig createClientEndpointConfig(Class<?> annotatedEndpointClass)
+    public Session connectToServer(Object pojo, URI path)
             throws DeploymentException {
-        ClientEndpoint annotation = annotatedEndpointClass.getAnnotation(ClientEndpoint.class);
+
+        ClientEndpoint annotation =
+                pojo.getClass().getAnnotation(ClientEndpoint.class);
         if (annotation == null) {
             throw new DeploymentException(
                     sm.getString("wsWebSocketContainer.missingAnnotation",
-                            annotatedEndpointClass.getName()));
+                            pojo.getClass().getName()));
         }
+
+        Endpoint ep = new PojoEndpointClient(pojo, Arrays.asList(annotation.decoders()));
 
         Class<? extends ClientEndpointConfig.Configurator> configuratorClazz =
                 annotation.configurator();
@@ -165,34 +152,56 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
                 encoders(Arrays.asList(annotation.encoders())).
                 preferredSubprotocols(Arrays.asList(annotation.subprotocols())).
                 build();
-
-        return config;
+        return connectToServer(ep, config, path);
     }
 
 
     @Override
-    public Session connectToServer(Class<? extends Endpoint> clazz, ClientEndpointConfig clientEndpointConfiguration,
-            URI path) throws DeploymentException {
-        ClientEndpointHolder holder = new EndpointClassHolder(clazz);
-        return connectToServerRecursive(holder, clientEndpointConfiguration, path, new HashSet<>());
-    }
-
-
-    @Override
-    public Session connectToServer(Endpoint endpoint, ClientEndpointConfig clientEndpointConfiguration, URI path)
-            throws DeploymentException {
-        ClientEndpointHolder holder = new EndpointHolder(endpoint);
-        return connectToServerRecursive(holder, clientEndpointConfiguration, path, new HashSet<>());
-    }
-
-
-    private Session connectToServerRecursive(ClientEndpointHolder clientEndpointHolder,
-            ClientEndpointConfig clientEndpointConfiguration, URI path, Set<URI> redirectSet)
+    public Session connectToServer(Class<?> annotatedEndpointClass, URI path)
             throws DeploymentException {
 
-        if (log.isDebugEnabled()) {
-            log.debug(sm.getString("wsWebSocketContainer.connect.entry", clientEndpointHolder.getClassName(), path));
+        Object pojo;
+        try {
+            pojo = annotatedEndpointClass.getConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new DeploymentException(sm.getString(
+                    "wsWebSocketContainer.endpointCreateFail",
+                    annotatedEndpointClass.getName()), e);
         }
+
+        return connectToServer(pojo, path);
+    }
+
+
+    @Override
+    public Session connectToServer(Class<? extends Endpoint> clazz,
+            ClientEndpointConfig clientEndpointConfiguration, URI path)
+            throws DeploymentException {
+
+        Endpoint endpoint;
+        try {
+            endpoint = clazz.getConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new DeploymentException(sm.getString(
+                    "wsWebSocketContainer.endpointCreateFail", clazz.getName()),
+                    e);
+        }
+
+        return connectToServer(endpoint, clientEndpointConfiguration, path);
+    }
+
+
+    @Override
+    public Session connectToServer(Endpoint endpoint,
+            ClientEndpointConfig clientEndpointConfiguration, URI path)
+            throws DeploymentException {
+        return connectToServerRecursive(endpoint, clientEndpointConfiguration, path, new HashSet<>());
+    }
+
+    private Session connectToServerRecursive(Endpoint endpoint,
+            ClientEndpointConfig clientEndpointConfiguration, URI path,
+            Set<URI> redirectSet)
+            throws DeploymentException {
 
         boolean secure = false;
         ByteBuffer proxyConnect = null;
@@ -292,13 +301,13 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
         boolean success = false;
         List<Extension> extensionsAgreed = new ArrayList<>();
         Transformation transformation = null;
+
+        // Open the connection
+        Future<Void> fConnect = socketChannel.connect(sa);
         AsyncChannelWrapper channel = null;
 
-        try {
-            // Open the connection
-            Future<Void> fConnect = socketChannel.connect(sa);
-
-            if (proxyConnect != null) {
+        if (proxyConnect != null) {
+            try {
                 fConnect.get(timeout, TimeUnit.MILLISECONDS);
                 // Proxy CONNECT is clear text
                 channel = new AsyncChannelWrapperNonSecure(socketChannel);
@@ -309,35 +318,34 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
                             "wsWebSocketContainer.proxyConnectFail", selectedProxy,
                             Integer.toString(httpResponse.getStatus())));
                 }
+            } catch (TimeoutException | InterruptedException | ExecutionException |
+                    EOFException e) {
+                if (channel != null) {
+                    channel.close();
+                }
+                throw new DeploymentException(
+                        sm.getString("wsWebSocketContainer.httpRequestFailed"), e);
             }
+        }
 
-            if (secure) {
-                // Regardless of whether a non-secure wrapper was created for a
-                // proxy CONNECT, need to use TLS from this point on so wrap the
-                // original AsynchronousSocketChannel
-                SSLEngine sslEngine = createSSLEngine(userProperties, host, port);
-                channel = new AsyncChannelWrapperSecure(socketChannel, sslEngine);
-            } else if (channel == null) {
-                // Only need to wrap as this point if it wasn't wrapped to process a
-                // proxy CONNECT
-                channel = new AsyncChannelWrapperNonSecure(socketChannel);
-            }
+        if (secure) {
+            // Regardless of whether a non-secure wrapper was created for a
+            // proxy CONNECT, need to use TLS from this point on so wrap the
+            // original AsynchronousSocketChannel
+            SSLEngine sslEngine = createSSLEngine(userProperties, host, port);
+            channel = new AsyncChannelWrapperSecure(socketChannel, sslEngine);
+        } else if (channel == null) {
+            // Only need to wrap as this point if it wasn't wrapped to process a
+            // proxy CONNECT
+            channel = new AsyncChannelWrapperNonSecure(socketChannel);
+        }
 
+        try {
             fConnect.get(timeout, TimeUnit.MILLISECONDS);
 
             Future<Void> fHandshake = channel.handshake();
             fHandshake.get(timeout, TimeUnit.MILLISECONDS);
 
-            if (log.isDebugEnabled()) {
-                SocketAddress localAddress = null;
-                try {
-                    localAddress = channel.getLocalAddress();
-                } catch (IOException ioe) {
-                    // Ignore
-                }
-                log.debug(sm.getString("wsWebSocketContainer.connect.write",
-                        Integer.valueOf(request.position()), Integer.valueOf(request.limit()), localAddress));
-            }
             writeRequest(channel, request, timeout);
 
             HttpResponse httpResponse = processResponse(response, channel, timeout);
@@ -385,8 +393,7 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
                                 Integer.toString(maxRedirects)));
                     }
 
-                    return connectToServerRecursive(
-                            clientEndpointHolder, clientEndpointConfiguration, redirectLocation, redirectSet);
+                    return connectToServerRecursive(endpoint, clientEndpointConfiguration, redirectLocation, redirectSet);
 
                 }
 
@@ -423,8 +430,7 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
                     userProperties.put(Constants.AUTHORIZATION_HEADER_NAME, auth.getAuthorization(
                             requestUri, wwwAuthenticateHeaders.get(0), userProperties));
 
-                    return connectToServerRecursive(
-                            clientEndpointHolder, clientEndpointConfiguration, path, redirectSet);
+                    return connectToServerRecursive(endpoint, clientEndpointConfiguration, path, redirectSet);
 
                 } else {
                     throw new DeploymentException(sm.getString("wsWebSocketContainer.invalidStatus",
@@ -480,23 +486,17 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
             throw new DeploymentException(sm.getString("wsWebSocketContainer.httpRequestFailed", path), e);
         } finally {
             if (!success) {
-                if (channel != null) {
-                    channel.close();
-                } else {
-                    try {
-                        socketChannel.close();
-                    } catch (IOException ioe) {
-                        // Ignore
-                    }
-                }
+                channel.close();
             }
         }
 
         // Switch to WebSocket
         WsRemoteEndpointImplClient wsRemoteEndpointClient = new WsRemoteEndpointImplClient(channel);
 
-        WsSession wsSession = new WsSession(clientEndpointHolder, wsRemoteEndpointClient, this, extensionsAgreed,
-                subProtocol, Collections.<String,String>emptyMap(), secure, clientEndpointConfiguration);
+        WsSession wsSession = new WsSession(endpoint, wsRemoteEndpointClient,
+                this, null, null, null, null, null, extensionsAgreed,
+                subProtocol, Collections.<String,String>emptyMap(), secure,
+                clientEndpointConfiguration);
 
         WsFrameClient wsFrameClient = new WsFrameClient(response, channel,
                 wsSession, transformation);
@@ -504,8 +504,8 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
         // completed transformation chain to the remote end point.
         wsRemoteEndpointClient.setTransformation(wsFrameClient.getTransformation());
 
-        wsSession.getLocal().onOpen(wsSession, clientEndpointConfiguration);
-        registerSession(wsSession.getLocal(), wsSession);
+        endpoint.onOpen(wsSession, clientEndpointConfiguration);
+        registerSession(endpoint, wsSession);
 
         /* It is possible that the server sent one or more messages as soon as
          * the WebSocket connection was established. Depending on the exact
@@ -720,8 +720,7 @@ public class WsWebSocketContainer implements WebSocketContainer, BackgroundProce
 
         // Request line
         result.put(GET_BYTES);
-        final String path = uri.getPath();
-        if (null == path || path.isEmpty()) {
+        if (null == uri.getPath() || "".equals(uri.getPath())) {
             result.put(ROOT_URI_BYTES);
         } else {
             result.put(uri.getRawPath().getBytes(StandardCharsets.ISO_8859_1));

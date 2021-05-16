@@ -80,6 +80,7 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
      *            the {@link Connection} to delegate all calls to.
      */
     public DelegatingConnection(final C c) {
+        super();
         connection = c;
     }
 
@@ -96,12 +97,14 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
                 if (conn.isClosed()) {
                     str = "connection is closed";
                 } else {
-                    final StringBuilder sb = new StringBuilder();
+                    final StringBuffer sb = new StringBuffer();
                     sb.append(hashCode());
                     final DatabaseMetaData meta = conn.getMetaData();
                     if (meta != null) {
                         sb.append(", URL=");
                         sb.append(meta.getURL());
+                        sb.append(", UserName=");
+                        sb.append(meta.getUserName());
                         sb.append(", ");
                         sb.append(meta.getDriverName());
                         str = sb.toString();
@@ -168,7 +171,7 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
      */
     public final Connection getInnermostDelegateInternal() {
         Connection conn = connection;
-        while (conn instanceof DelegatingConnection) {
+        while (conn != null && conn instanceof DelegatingConnection) {
             conn = ((DelegatingConnection<?>) conn).getDelegateInternal();
             if (this == conn) {
                 return null;
@@ -529,7 +532,7 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
         try {
             connection.setAutoCommit(autoCommit);
             if (cacheState) {
-                autoCommitCached = Boolean.valueOf(connection.getAutoCommit());
+                autoCommitCached = Boolean.valueOf(autoCommit);
             }
         } catch (final SQLException e) {
             autoCommitCached = null;
@@ -553,7 +556,7 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
         try {
             connection.setReadOnly(readOnly);
             if (cacheState) {
-                readOnlyCached = Boolean.valueOf(connection.isReadOnly());
+                readOnlyCached = Boolean.valueOf(readOnly);
             }
         } catch (final SQLException e) {
             readOnlyCached = null;
@@ -616,11 +619,11 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
         final List<AbandonedTrace> traces = getTrace();
         if (traces != null && !traces.isEmpty()) {
             final List<Exception> thrownList = new ArrayList<>();
-            for (final Object trace : traces) {
+            for (Object trace : traces) {
                 if (trace instanceof Statement) {
                     try {
                         ((Statement) trace).close();
-                    } catch (final Exception e) {
+                    } catch (Exception e) {
                         thrownList.add(e);
                     }
                 } else if (trace instanceof ResultSet) {
@@ -628,7 +631,7 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
                     // generated via DatabaseMetaData
                     try {
                         ((ResultSet) trace).close();
-                    } catch (final Exception e) {
+                    } catch (Exception e) {
                         thrownList.add(e);
                     }
                 }
@@ -764,7 +767,7 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
     }
 
     @Override
-    public PreparedStatement prepareStatement(final String sql, final int[] columnIndexes) throws SQLException {
+    public PreparedStatement prepareStatement(final String sql, final int columnIndexes[]) throws SQLException {
         checkOpen();
         try {
             final DelegatingPreparedStatement dps = new DelegatingPreparedStatement(this,
@@ -778,7 +781,7 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
     }
 
     @Override
-    public PreparedStatement prepareStatement(final String sql, final String[] columnNames) throws SQLException {
+    public PreparedStatement prepareStatement(final String sql, final String columnNames[]) throws SQLException {
         checkOpen();
         try {
             final DelegatingPreparedStatement dps = new DelegatingPreparedStatement(this,
@@ -961,6 +964,7 @@ public class DelegatingConnection<C extends Connection> extends AbandonedTrace i
 
     @Override
     public void abort(final Executor executor) throws SQLException {
+        checkOpen();
         try {
             Jdbc41Bridge.abort(connection, executor);
         } catch (final SQLException e) {

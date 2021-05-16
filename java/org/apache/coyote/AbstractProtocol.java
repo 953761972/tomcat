@@ -19,7 +19,6 @@ package org.apache.coyote;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -36,10 +35,12 @@ import javax.management.MBeanRegistrationException;
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
-import javax.servlet.http.HttpUpgradeHandler;
-import javax.servlet.http.WebConnection;
+
+import jakarta.servlet.http.HttpUpgradeHandler;
+import jakarta.servlet.http.WebConnection;
 
 import org.apache.coyote.http11.upgrade.InternalHttpUpgradeHandler;
+import org.apache.coyote.http11.upgrade.UpgradeProcessorInternal;
 import org.apache.juli.logging.Log;
 import org.apache.tomcat.InstanceManager;
 import org.apache.tomcat.util.ExceptionUtils;
@@ -68,6 +69,12 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
 
     /**
+     * Name of MBean for the Global Request Processor.
+     */
+    protected ObjectName rgOname = null;
+
+
+    /**
      * Unique ID for this connector. Only used if the connector is configured
      * to use a random port as the port will change if stop(), start() is
      * called.
@@ -87,7 +94,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
 
     private final Set<Processor> waitingProcessors =
-            Collections.newSetFromMap(new ConcurrentHashMap<>());
+            Collections.newSetFromMap(new ConcurrentHashMap<Processor, Boolean>());
 
     /**
      * Controller for the timeout scheduling.
@@ -136,14 +143,6 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
 
     // ------------------------------- Properties managed by the ProtocolHandler
-
-    /**
-     * Name of MBean for the Global Request Processor.
-     */
-    protected ObjectName rgOname = null;
-    public ObjectName getGlobalRequestProcessorMBeanName() {
-        return rgOname;
-    }
 
     /**
      * The adapter provides the link between the ProtocolHandler and the
@@ -204,12 +203,6 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
     @Override
     public boolean isSendfileSupported() {
         return endpoint.getUseSendfile();
-    }
-
-
-    @Override
-    public String getId() {
-        return endpoint.getId();
     }
 
 
@@ -319,29 +312,6 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         return endpoint.getConnectionCount();
     }
 
-    /**
-     * NO-OP.
-     *
-     * @param threadCount Unused
-     *
-     * @deprecated Will be removed in Tomcat 10.
-     */
-    @Deprecated
-    public void setAcceptorThreadCount(int threadCount) {
-    }
-
-    /**
-     * Always returns 1.
-     *
-     * @return Always 1.
-     *
-     * @deprecated Will be removed in Tomcat 10.
-     */
-    @Deprecated
-    public int getAcceptorThreadCount() {
-      return 1;
-    }
-
     public void setAcceptorThreadPriority(int threadPriority) {
         endpoint.setAcceptorThreadPriority(threadPriority);
     }
@@ -376,27 +346,22 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
     private String getNameInternal() {
         StringBuilder name = new StringBuilder(getNamePrefix());
         name.append('-');
-        String id = getId();
-        if (id != null) {
-            name.append(id);
-        } else {
-            if (getAddress() != null) {
-                name.append(getAddress().getHostAddress());
+        if (getAddress() != null) {
+            name.append(getAddress().getHostAddress());
+            name.append('-');
+        }
+        int port = getPortWithOffset();
+        if (port == 0) {
+            // Auto binding is in use. Check if port is known
+            name.append("auto-");
+            name.append(getNameIndex());
+            port = getLocalPort();
+            if (port != -1) {
                 name.append('-');
-            }
-            int port = getPortWithOffset();
-            if (port == 0) {
-                // Auto binding is in use. Check if port is known
-                name.append("auto-");
-                name.append(getNameIndex());
-                port = getLocalPort();
-                if (port != -1) {
-                    name.append('-');
-                    name.append(port);
-                }
-            } else {
                 name.append(port);
             }
+        } else {
+            name.append(port);
         }
         return name.toString();
     }
@@ -415,15 +380,6 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
             getLog().debug(sm.getString("abstractProtocol.waitingProcessor.remove", processor));
         }
         waitingProcessors.remove(processor);
-    }
-
-
-    /*
-     * Primarily for debugging and testing. Could be exposed via JMX if
-     * considered useful.
-     */
-    public int getWaitingProcessorCount() {
-        return waitingProcessors.size();
     }
 
 
@@ -590,8 +546,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         }
 
         if (this.domain != null) {
-            ObjectName rgOname = new ObjectName(domain + ":type=GlobalRequestProcessor,name=" + getName());
-            this.rgOname = rgOname;
+            rgOname = new ObjectName(domain + ":type=GlobalRequestProcessor,name=" + getName());
             Registry.getRegistry(null, null).registerComponent(
                     getHandler().getGlobal(), rgOname, null);
         }
@@ -613,9 +568,12 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
 
         endpoint.start();
         monitorFuture = getUtilityExecutor().scheduleWithFixedDelay(
-                () -> {
-                    if (!isPaused()) {
-                        startAsyncTimeout();
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        if (!isPaused()) {
+                            startAsyncTimeout();
+                        }
                     }
                 }, 0, 60, TimeUnit.SECONDS);
     }
@@ -627,7 +585,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
      * is triggered independently of the socket read/write timeouts.
      */
     protected void startAsyncTimeout() {
-        if (timeoutFuture == null || timeoutFuture.isDone()) {
+        if (timeoutFuture == null || (timeoutFuture != null && timeoutFuture.isDone())) {
             if (timeoutFuture != null && timeoutFuture.isDone()) {
                 // There was an error executing the scheduled task, get it and log it
                 try {
@@ -637,10 +595,13 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 }
             }
             timeoutFuture = getUtilityExecutor().scheduleAtFixedRate(
-                    () -> {
-                        long now = System.currentTimeMillis();
-                        for (Processor processor : waitingProcessors) {
-                            processor.timeoutAsync(now);
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            long now = System.currentTimeMillis();
+                            for (Processor processor : waitingProcessors) {
+                                processor.timeoutAsync(now);
+                            }
                         }
                     }, 1, 1, TimeUnit.SECONDS);
         }
@@ -725,7 +686,6 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                 }
             }
 
-            ObjectName rgOname = getGlobalRequestProcessorMBeanName();
             if (rgOname != null) {
                 Registry.getRegistry(null, null).unregisterComponent(rgOname);
             }
@@ -736,14 +696,6 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
     @Override
     public void closeServerSocketGraceful() {
         endpoint.closeServerSocketGraceful();
-    }
-
-
-    @Override
-    public long awaitConnectionsClose(long waitMillis) {
-        getLog().info(sm.getString("abstractProtocol.closeConnectionsAwait",
-                Long.valueOf(waitMillis), getName()));
-        return endpoint.awaitConnectionsClose(waitMillis);
     }
 
 
@@ -895,10 +847,8 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                     if (state == SocketState.UPGRADING) {
                         // Get the HTTP upgrade handler
                         UpgradeToken upgradeToken = processor.getUpgradeToken();
-                        // Restore leftover input to the wrapper so the upgrade
-                        // processor can process it.
+                        // Retrieve leftover input
                         ByteBuffer leftOverInput = processor.getLeftoverInput();
-                        wrapper.unRead(leftOverInput);
                         if (upgradeToken == null) {
                             // Assume direct HTTP/2 connection
                             UpgradeProtocol upgradeProtocol = getProtocol().getUpgradeProtocol("h2c");
@@ -907,6 +857,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                                 release(processor);
                                 // Create the upgrade processor
                                 processor = upgradeProtocol.getProcessor(wrapper, getProtocol().getAdapter());
+                                wrapper.unRead(leftOverInput);
                                 // Associate with the processor with the connection
                                 wrapper.setCurrentProcessor(processor);
                             } else {
@@ -928,6 +879,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                                 getLog().debug(sm.getString("abstractConnectionHandler.upgradeCreate",
                                         processor, wrapper));
                             }
+                            wrapper.unRead(leftOverInput);
                             // Associate with the processor with the connection
                             wrapper.setCurrentProcessor(processor);
                             // Initialise the upgrade handler (which may trigger
@@ -949,7 +901,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                             if (httpUpgradeHandler instanceof InternalHttpUpgradeHandler) {
                                 if (((InternalHttpUpgradeHandler) httpUpgradeHandler).hasAsyncIO()) {
                                     // The handler will initiate all further I/O
-                                    state = SocketState.UPGRADED;
+                                    state = SocketState.LONG;
                                 }
                             }
                         }
@@ -1071,20 +1023,6 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         }
 
 
-        @Override
-        public Set<S> getOpenSockets() {
-            Set<SocketWrapperBase<S>> set = proto.getEndpoint().getConnections();
-            Set<S> result = new HashSet<>();
-            for (SocketWrapperBase<S> socketWrapper : set) {
-                S socket = socketWrapper.getSocket();
-                if (socket != null) {
-                    result.add(socket);
-                }
-            }
-            return result;
-        }
-
-
         /**
          * Expected to be used by the handler once the processor is no longer
          * required.
@@ -1096,14 +1034,15 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
             if (processor != null) {
                 processor.recycle();
                 if (processor.isUpgrade()) {
-                    // While UpgradeProcessor instances should not normally be
-                    // present in waitingProcessors there are various scenarios
-                    // where this can happen. E.g.:
-                    // - when AsyncIO is used
-                    // - WebSocket I/O error on non-container thread
-                    // Err on the side of caution and always try and remove any
-                    // UpgradeProcessor instances from waitingProcessors
-                    getProtocol().removeWaitingProcessor(processor);
+                    // UpgradeProcessorInternal instances can utilise AsyncIO.
+                    // If they do, the processor will not pass through the
+                    // process() method and be removed from waitingProcessors
+                    // so do that here.
+                    if (processor instanceof UpgradeProcessorInternal) {
+                        if (((UpgradeProcessorInternal) processor).hasAsyncIO()) {
+                            getProtocol().removeWaitingProcessor(processor);
+                        }
+                    }
                 } else {
                     // After recycling, only instances of UpgradeProcessorBase
                     // will return true for isUpgrade().

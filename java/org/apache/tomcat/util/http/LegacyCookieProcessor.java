@@ -22,8 +22,8 @@ import java.text.FieldPosition;
 import java.util.BitSet;
 import java.util.Date;
 
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -230,12 +230,6 @@ public final class LegacyCookieProcessor extends CookieProcessorBase {
             // search from the next position
             pos = headers.findHeader("Cookie", ++pos);
         }
-    }
-
-
-    @Override
-    public String generateHeader(Cookie cookie) {
-        return generateHeader(cookie, null);
     }
 
 

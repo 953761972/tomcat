@@ -24,7 +24,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.servlet.RequestDispatcher;
+import jakarta.servlet.RequestDispatcher;
 
 import org.apache.tomcat.util.ExceptionUtils;
 import org.apache.tomcat.util.buf.ByteChunk;
@@ -99,9 +99,6 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
      * @param t The error which occurred
      */
     protected void setErrorState(ErrorState errorState, Throwable t) {
-        if (getLog().isDebugEnabled()) {
-            getLog().debug(sm.getString("abstractProcessor.setErrorState", errorState), t);
-        }
         // Use the return value to avoid processing more than one async error
         // in a single async cycle.
         boolean setError = response.setError();
@@ -393,7 +390,7 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
             break;
         }
         case ACK: {
-            ack((ContinueResponseTiming) param);
+            ack();
             break;
         }
         case CLIENT_FLUSH: {
@@ -448,12 +445,6 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
         case REQ_HOST_ADDR_ATTRIBUTE: {
             if (getPopulateRequestAttributesFromSocket() && socketWrapper != null) {
                 request.remoteAddr().setString(socketWrapper.getRemoteAddr());
-            }
-            break;
-        }
-        case REQ_PEER_ADDR_ATTRIBUTE: {
-            if (getPopulateRequestAttributesFromSocket() && socketWrapper != null) {
-                request.peerAddr().setString(socketWrapper.getRemoteAddr());
             }
             break;
         }
@@ -731,17 +722,7 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
     protected abstract void finishResponse() throws IOException;
 
 
-    /**
-     * @deprecated Unused. This will be removed in Tomcat 10 onwards. Use
-     *             {@link #ack(ContinueResponseTiming)}.
-     */
-    @Deprecated
-    protected void ack() {
-        ack(ContinueResponseTiming.ALWAYS);
-    }
-
-
-    protected abstract void ack(ContinueResponseTiming continueResponseTiming);
+    protected abstract void ack();
 
 
     protected abstract void flush() throws IOException;
@@ -810,14 +791,6 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
                 sslO = sslSupport.getProtocol();
                 if (sslO != null) {
                     request.setAttribute(SSLSupport.PROTOCOL_VERSION_KEY, sslO);
-                }
-                sslO = sslSupport.getRequestedProtocols();
-                if (sslO != null) {
-                    request.setAttribute(SSLSupport.REQUESTED_PROTOCOL_VERSIONS_KEY, sslO);
-                }
-                sslO = sslSupport.getRequestedCiphers();
-                if (sslO != null) {
-                    request.setAttribute(SSLSupport.REQUESTED_CIPHERS_KEY, sslO);
                 }
                 request.setAttribute(SSLSupport.SESSION_MGR, sslSupport);
             }
@@ -1052,7 +1025,7 @@ public abstract class AbstractProcessor extends AbstractProcessorLight implement
         // information (e.g. client IP)
         setSocketWrapper(socketWrapper);
         // Setup the minimal request information
-        request.setStartTime(System.currentTimeMillis());
+        request.setStartTimeNanos(System.nanoTime());
         // Setup the minimal response information
         response.setStatus(400);
         response.setError();

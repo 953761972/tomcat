@@ -25,7 +25,6 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -36,7 +35,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -44,28 +42,29 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
-import javax.servlet.AsyncContext;
-import javax.servlet.DispatcherType;
-import javax.servlet.FilterChain;
-import javax.servlet.MultipartConfigElement;
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.ServletInputStream;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletRequestAttributeEvent;
-import javax.servlet.ServletRequestAttributeListener;
-import javax.servlet.ServletResponse;
-import javax.servlet.SessionTrackingMode;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletMapping;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletRequestWrapper;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-import javax.servlet.http.HttpUpgradeHandler;
-import javax.servlet.http.Part;
-import javax.servlet.http.PushBuilder;
+
+import jakarta.servlet.AsyncContext;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.MultipartConfigElement;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletInputStream;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletRequestAttributeEvent;
+import jakarta.servlet.ServletRequestAttributeListener;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.SessionTrackingMode;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletMapping;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpUpgradeHandler;
+import jakarta.servlet.http.Part;
+import jakarta.servlet.http.PushBuilder;
 
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
@@ -114,7 +113,6 @@ import org.apache.tomcat.util.http.fileupload.impl.SizeException;
 import org.apache.tomcat.util.http.fileupload.servlet.ServletFileUpload;
 import org.apache.tomcat.util.http.fileupload.servlet.ServletRequestContext;
 import org.apache.tomcat.util.http.parser.AcceptLanguage;
-import org.apache.tomcat.util.http.parser.Upgrade;
 import org.apache.tomcat.util.net.SSLSupport;
 import org.apache.tomcat.util.res.StringManager;
 import org.ietf.jgss.GSSCredential;
@@ -128,8 +126,6 @@ import org.ietf.jgss.GSSException;
  */
 public class Request implements HttpServletRequest {
 
-    private static final String HTTP_UPGRADE_HEADER_NAME = "upgrade";
-
     private static final Log log = LogFactory.getLog(Request.class);
 
     /**
@@ -142,11 +138,6 @@ public class Request implements HttpServletRequest {
      */
     public Request(Connector connector) {
         this.connector = connector;
-
-        formats = new SimpleDateFormat[formatsTemplate.length];
-        for(int i = 0; i < formats.length; i++) {
-            formats[i] = (SimpleDateFormat) formatsTemplate[i].clone();
-        }
     }
 
 
@@ -181,13 +172,6 @@ public class Request implements HttpServletRequest {
     // ----------------------------------------------------- Variables
 
     /**
-     * @deprecated Unused. This will be removed in Tomcat 10.
-     */
-    @Deprecated
-    protected static final TimeZone GMT_ZONE = TimeZone.getTimeZone("GMT");
-
-
-    /**
      * The string manager for this package.
      */
     protected static final StringManager sm = StringManager.getManager(Request.class);
@@ -197,25 +181,6 @@ public class Request implements HttpServletRequest {
      * The set of cookies associated with this Request.
      */
     protected Cookie[] cookies = null;
-
-
-    /**
-     * The set of SimpleDateFormat formats to use in getDateHeader().
-     *
-     * Notice that because SimpleDateFormat is not thread-safe, we can't
-     * declare formats[] as a static variable.
-     *
-     * @deprecated Unused. This will be removed in Tomcat 10
-     */
-    @Deprecated
-    protected final SimpleDateFormat formats[];
-
-    @Deprecated
-    private static final SimpleDateFormat formatsTemplate[] = {
-        new SimpleDateFormat(FastHttpDateFormat.RFC1123_DATE, Locale.US),
-        new SimpleDateFormat("EEEEEE, dd-MMM-yy HH:mm:ss zzz", Locale.US),
-        new SimpleDateFormat("EEE MMMM d HH:mm:ss yyyy", Locale.US)
-    };
 
 
     /**
@@ -411,12 +376,6 @@ public class Request implements HttpServletRequest {
 
 
     /**
-     * Connection peer address.
-     */
-    protected String peerAddr = null;
-
-
-    /**
      * Remote host.
      */
     protected String remoteHost = null;
@@ -493,7 +452,6 @@ public class Request implements HttpServletRequest {
         localesParsed = false;
         secure = false;
         remoteAddr = null;
-        peerAddr = null;
         remoteHost = null;
         remotePort = -1;
         localPort = -1;
@@ -898,7 +856,7 @@ public class Request implements HttpServletRequest {
         if (attr != null) {
             return attr;
         }
-        if (!sslAttributesParsed && TLSUtil.isTLSRequestAttribute(name)) {
+        if (TLSUtil.isTLSRequestAttribute(name)) {
             coyoteRequest.action(ActionCode.REQ_SSL_ATTRIBUTE, coyoteRequest);
             attr = coyoteRequest.getAttribute(Globals.CERTIFICATES_ATTR);
             if (attr != null) {
@@ -923,14 +881,6 @@ public class Request implements HttpServletRequest {
             attr = coyoteRequest.getAttribute(SSLSupport.PROTOCOL_VERSION_KEY);
             if (attr != null) {
                 attributes.put(SSLSupport.PROTOCOL_VERSION_KEY, attr);
-            }
-            attr = coyoteRequest.getAttribute(SSLSupport.REQUESTED_PROTOCOL_VERSIONS_KEY);
-            if (attr != null) {
-                attributes.put(SSLSupport.REQUESTED_PROTOCOL_VERSIONS_KEY, attr);
-            }
-            attr = coyoteRequest.getAttribute(SSLSupport.REQUESTED_CIPHERS_KEY);
-            if (attr != null) {
-                attributes.put(SSLSupport.REQUESTED_CIPHERS_KEY, attr);
             }
             attr = attributes.get(name);
             sslAttributesParsed = true;
@@ -1304,18 +1254,6 @@ public class Request implements HttpServletRequest {
             remoteAddr = coyoteRequest.remoteAddr().toString();
         }
         return remoteAddr;
-    }
-
-
-    /**
-     * @return the connection peer IP address making this Request.
-     */
-    public String getPeerAddr() {
-        if (peerAddr == null) {
-            coyoteRequest.action(ActionCode.REQ_PEER_ADDR_ATTRIBUTE, coyoteRequest);
-            peerAddr = coyoteRequest.peerAddr().toString();
-        }
-        return peerAddr;
     }
 
 
@@ -2078,8 +2016,8 @@ public class Request implements HttpServletRequest {
                 SecurityException e) {
             throw new ServletException(e);
         }
-        UpgradeToken upgradeToken = new UpgradeToken(handler, getContext(), instanceManager,
-                getUpgradeProtocolName(httpUpgradeHandlerClass));
+        UpgradeToken upgradeToken = new UpgradeToken(handler,
+                getContext(), instanceManager);
 
         coyoteRequest.action(ActionCode.UPGRADE, upgradeToken);
 
@@ -2089,29 +2027,6 @@ public class Request implements HttpServletRequest {
 
         return handler;
     }
-
-
-    private String getUpgradeProtocolName(Class<? extends HttpUpgradeHandler> httpUpgradeHandlerClass) {
-        // Ideal - the caller has already explicitly set the selected protocol
-        // on the response
-        String result = response.getHeader(HTTP_UPGRADE_HEADER_NAME);
-
-        if (result == null) {
-            // If the request's upgrade header contains a single protocol that
-            // is the protocol that must have been selected
-            List<Upgrade> upgradeProtocols = Upgrade.parse(getHeaders(HTTP_UPGRADE_HEADER_NAME));
-            if (upgradeProtocols != null && upgradeProtocols.size() == 1) {
-                result = upgradeProtocols.get(0).toString();
-            }
-        }
-
-        if (result == null) {
-            // Ugly but use the class name - it is better than nothing
-            result = httpUpgradeHandlerClass.getName();
-        }
-        return result;
-    }
-
 
     /**
      * Return the authentication type used for this Request.
@@ -3606,9 +3521,5 @@ public class Request implements HttpServletRequest {
                         // NO-OP
                     }
                 });
-
-        for (SimpleDateFormat sdf : formatsTemplate) {
-            sdf.setTimeZone(GMT_ZONE);
-        }
     }
 }

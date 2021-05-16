@@ -29,9 +29,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
@@ -364,7 +364,7 @@ public class RewriteValve extends ValveBase {
                     // Append the query string to the url if there is one and it
                     // hasn't been rewritten
                     String urlStringDecoded = urlDecoded.toString();
-                    int index = urlStringDecoded.indexOf('?');
+                    int index = urlStringDecoded.indexOf("?");
                     String rewrittenQueryStringDecoded;
                     if (index == -1) {
                         rewrittenQueryStringDecoded = null;

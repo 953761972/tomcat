@@ -539,7 +539,11 @@ public abstract class AbstractReplicatedMap<K,V>
                     log.warn(sm.getString("abstractReplicatedMap.transferState.noReplies"));
                 }
             }
-        } catch (ChannelException | ClassNotFoundException | IOException x) {
+        } catch (ChannelException x) {
+            log.error(sm.getString("abstractReplicatedMap.unable.transferState"), x);
+        } catch (IOException x) {
+            log.error(sm.getString("abstractReplicatedMap.unable.transferState"), x);
+        } catch (ClassNotFoundException x) {
             log.error(sm.getString("abstractReplicatedMap.unable.transferState"), x);
         }
         this.state = State.STATETRANSFERRED;
@@ -577,7 +581,7 @@ public abstract class AbstractReplicatedMap<K,V>
 
         //state transfer request
         if (mapmsg.getMsgType() == MapMessage.MSG_STATE || mapmsg.getMsgType() == MapMessage.MSG_STATE_COPY) {
-            synchronized (stateMutex) { //make sure we don't do two things at the same time
+            synchronized (stateMutex) { //make sure we dont do two things at the same time
                 ArrayList<MapMessage> list = new ArrayList<>();
                 for (Entry<K, MapEntry<K, V>> e : innerMap.entrySet()) {
                     MapEntry<K,V> entry = innerMap.get(e.getKey());
@@ -638,7 +642,9 @@ public abstract class AbstractReplicatedMap<K,V>
                     log.info(sm.getString("abstractReplicatedMap.leftOver.ignored",
                             mapmsg.getTypeDesc()));
             }
-        } catch (IOException | ClassNotFoundException x) {
+        } catch (IOException x ) {
+            log.error(sm.getString("abstractReplicatedMap.unable.deserialize.MapMessage"),x);
+        } catch (ClassNotFoundException x ) {
             log.error(sm.getString("abstractReplicatedMap.unable.deserialize.MapMessage"),x);
         }
     }
@@ -655,7 +661,10 @@ public abstract class AbstractReplicatedMap<K,V>
 
         try {
             mapmsg.deserialize(getExternalLoaders());
-        } catch (IOException | ClassNotFoundException x) {
+        } catch (IOException x) {
+            log.error(sm.getString("abstractReplicatedMap.unable.deserialize.MapMessage"), x);
+            return;
+        } catch (ClassNotFoundException x) {
             log.error(sm.getString("abstractReplicatedMap.unable.deserialize.MapMessage"), x);
             return;
         }

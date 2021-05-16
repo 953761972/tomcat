@@ -126,11 +126,14 @@ public final class ClassLoaderFactory {
         // Construct the class loader itself
         final URL[] array = set.toArray(new URL[0]);
         return AccessController.doPrivileged(
-                (PrivilegedAction<URLClassLoader>) () -> {
-                    if (parent == null) {
-                        return new URLClassLoader(array);
-                    } else {
-                        return new URLClassLoader(array, parent);
+                new PrivilegedAction<URLClassLoader>() {
+                    @Override
+                    public URLClassLoader run() {
+                        if (parent == null) {
+                            return new URLClassLoader(array);
+                        } else {
+                            return new URLClassLoader(array, parent);
+                        }
                     }
                 });
     }
@@ -226,11 +229,14 @@ public final class ClassLoaderFactory {
             }
 
         return AccessController.doPrivileged(
-                (PrivilegedAction<URLClassLoader>) () -> {
-                    if (parent == null)
-                        return new URLClassLoader(array);
-                    else
-                        return new URLClassLoader(array, parent);
+                new PrivilegedAction<URLClassLoader>() {
+                    @Override
+                    public URLClassLoader run() {
+                        if (parent == null)
+                            return new URLClassLoader(array);
+                        else
+                            return new URLClassLoader(array, parent);
+                    }
                 });
     }
 

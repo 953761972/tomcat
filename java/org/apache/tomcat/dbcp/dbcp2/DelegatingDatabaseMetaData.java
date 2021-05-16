@@ -51,6 +51,7 @@ public class DelegatingDatabaseMetaData implements DatabaseMetaData {
      */
     public DelegatingDatabaseMetaData(final DelegatingConnection<?> connection,
             final DatabaseMetaData databaseMetaData) {
+        super();
         this.connection = connection;
         this.databaseMetaData = databaseMetaData;
     }
@@ -438,7 +439,7 @@ public class DelegatingDatabaseMetaData implements DatabaseMetaData {
      */
     public DatabaseMetaData getInnermostDelegate() {
         DatabaseMetaData m = databaseMetaData;
-        while (m instanceof DelegatingDatabaseMetaData) {
+        while (m != null && m instanceof DelegatingDatabaseMetaData) {
             m = ((DelegatingDatabaseMetaData) m).getDelegate();
             if (this == m) {
                 return null;

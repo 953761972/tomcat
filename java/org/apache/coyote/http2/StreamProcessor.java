@@ -24,10 +24,8 @@ import org.apache.coyote.AbstractProcessor;
 import org.apache.coyote.ActionCode;
 import org.apache.coyote.Adapter;
 import org.apache.coyote.ContainerThreadMarker;
-import org.apache.coyote.ContinueResponseTiming;
 import org.apache.coyote.ErrorState;
 import org.apache.coyote.Request;
-import org.apache.coyote.RequestGroupInfo;
 import org.apache.coyote.Response;
 import org.apache.coyote.http11.filters.GzipOutputFilter;
 import org.apache.juli.logging.Log;
@@ -77,26 +75,17 @@ class StreamProcessor extends AbstractProcessor {
                         handler.getProtocol().getHttp11Protocol().addWaitingProcessor(this);
                     } else if (state == SocketState.CLOSED) {
                         handler.getProtocol().getHttp11Protocol().removeWaitingProcessor(this);
-                        if (!stream.isInputFinished() && getErrorState().isIoAllowed()) {
-                            // The request has been processed but the request body has not been
-                            // fully read. This typically occurs when Tomcat rejects an upload
-                            // of some form (e.g. PUT or POST). Need to tell the client not to
-                            // send any more data on this stream (reset).
-                            StreamException se = new StreamException(
-                                    sm.getString("streamProcessor.cancel", stream.getConnectionId(),
-                                            stream.getIdAsString()), Http2Error.CANCEL, stream.getIdAsInt());
-                            stream.close(se);
-                        } else if (!getErrorState().isConnectionIoAllowed()) {
+                        if (!getErrorState().isConnectionIoAllowed()) {
                             ConnectionException ce = new ConnectionException(sm.getString(
                                     "streamProcessor.error.connection", stream.getConnectionId(),
-                                    stream.getIdAsString()), Http2Error.INTERNAL_ERROR);
+                                    stream.getIdentifier()), Http2Error.INTERNAL_ERROR);
                             stream.close(ce);
                         } else if (!getErrorState().isIoAllowed()) {
                             StreamException se = stream.getResetException();
                             if (se == null) {
                                 se = new StreamException(sm.getString(
                                         "streamProcessor.error.stream", stream.getConnectionId(),
-                                        stream.getIdAsString()), Http2Error.INTERNAL_ERROR,
+                                        stream.getIdentifier()), Http2Error.INTERNAL_ERROR,
                                         stream.getIdAsInt());
                             }
                             stream.close(se);
@@ -109,11 +98,12 @@ class StreamProcessor extends AbstractProcessor {
                     }
                 } catch (Exception e) {
                     String msg = sm.getString("streamProcessor.error.connection",
-                            stream.getConnectionId(), stream.getIdAsString());
+                            stream.getConnectionId(), stream.getIdentifier());
                     if (log.isDebugEnabled()) {
                         log.debug(msg, e);
                     }
-                    ConnectionException ce = new ConnectionException(msg, Http2Error.INTERNAL_ERROR, e);
+                    ConnectionException ce = new ConnectionException(msg, Http2Error.INTERNAL_ERROR);
+                    ce.initCause(e);
                     stream.close(ce);
                     state = SocketState.CLOSED;
                 } finally {
@@ -221,17 +211,12 @@ class StreamProcessor extends AbstractProcessor {
 
 
     @Override
-    protected final void ack(ContinueResponseTiming continueResponseTiming) {
-        // Only try and send the ACK for ALWAYS or if the timing of the request
-        // to send the ACK matches the current configuration.
-        if (continueResponseTiming == ContinueResponseTiming.ALWAYS ||
-                continueResponseTiming == handler.getProtocol().getContinueResponseTimingInternal()) {
-            if (!response.isCommitted() && request.hasExpectation()) {
-                try {
-                    stream.writeAck();
-                } catch (IOException ioe) {
-                    setErrorState(ErrorState.CLOSE_CONNECTION_NOW, ioe);
-                }
+    protected final void ack() {
+        if (!response.isCommitted() && request.hasExpectation()) {
+            try {
+                stream.writeAck();
+            } catch (IOException ioe) {
+                setErrorState(ErrorState.CLOSE_CONNECTION_NOW, ioe);
             }
         }
     }
@@ -373,22 +358,13 @@ class StreamProcessor extends AbstractProcessor {
 
     @Override
     protected Object getStreamID() {
-        return stream.getIdAsString().toString();
+        return stream.getIdentifier().toString();
     }
 
 
     @Override
     public final void recycle() {
         // StreamProcessor instances are not re-used.
-
-        // Calling removeRequestProcessor even though the RequestProcesser was
-        // never added will add the values from the RequestProcessor to the
-        // running total for the GlobalRequestProcessor
-        RequestGroupInfo global = handler.getProtocol().getGlobal();
-        if (global != null) {
-            global.removeRequestProcessor(request.getRequestProcessor());
-        }
-
         // Clear fields that can be cleared to aid GC and trigger NPEs if this
         // is reused
         setSocketWrapper(null);
@@ -419,6 +395,13 @@ class StreamProcessor extends AbstractProcessor {
             setErrorState(ErrorState.CLOSE_NOW, e);
         }
 
+        if (!isAsync()) {
+            // If this is an async request then the request ends when it has
+            // been completed. The AsyncContext is responsible for calling
+            // endRequest() in that case.
+            endRequest();
+        }
+
         if (sendfileState == SendfileState.PENDING) {
             return SocketState.SENDFILE;
         } else if (getErrorState().isError()) {
@@ -439,7 +422,7 @@ class StreamProcessor extends AbstractProcessor {
     protected final boolean flushBufferedWrite() throws IOException {
         if (log.isDebugEnabled()) {
             log.debug(sm.getString("streamProcessor.flushBufferedWrite.entry",
-                    stream.getConnectionId(), stream.getIdAsString()));
+                    stream.getConnectionId(), stream.getIdentifier()));
         }
         if (stream.flush(false)) {
             // The buffer wasn't fully flushed so re-register the
@@ -461,6 +444,30 @@ class StreamProcessor extends AbstractProcessor {
 
     @Override
     protected final SocketState dispatchEndRequest() throws IOException {
+        endRequest();
         return SocketState.CLOSED;
+    }
+
+
+    private void endRequest() throws IOException {
+        if (!stream.isInputFinished() && getErrorState().isIoAllowed()) {
+            if (handler.hasAsyncIO() && !stream.isContentLengthInconsistent()) {
+                // Need an additional checks for asyncIO as the end of stream
+                // might have been set on the header frame but not processed
+                // yet. Checking for this here so the extra processing only
+                // occurs on the potential error condition rather than on every
+                // request.
+                return;
+            }
+            // The request has been processed but the request body has not been
+            // fully read. This typically occurs when Tomcat rejects an upload
+            // of some form (e.g. PUT or POST). Need to tell the client not to
+            // send any more data but only if a reset has not already been
+            // triggered.
+            StreamException se = new StreamException(
+                    sm.getString("streamProcessor.cancel", stream.getConnectionId(),
+                            stream.getIdentifier()), Http2Error.CANCEL, stream.getIdAsInt());
+            handler.sendStreamReset(se);
+        }
     }
 }

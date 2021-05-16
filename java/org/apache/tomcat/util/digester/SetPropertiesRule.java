@@ -85,7 +85,7 @@ public class SetPropertiesRule extends Rule {
 
         for (int i = 0; i < attributes.getLength(); i++) {
             String name = attributes.getLocalName(i);
-            if (name.isEmpty()) {
+            if ("".equals(name)) {
                 name = attributes.getQName(i);
             }
             String value = attributes.getValue(i);
@@ -95,7 +95,8 @@ public class SetPropertiesRule extends Rule {
                         "} Setting property '" + name + "' to '" +
                         value + "'");
             }
-            if (!digester.isFakeAttribute(top, name) && (excludes == null || !excludes.containsKey(name))) {
+            if (!digester.isFakeAttribute(top, name)
+                    && (excludes == null || (excludes != null && !excludes.containsKey(name)))) {
                 StringBuilder actualMethod = null;
                 if (code != null) {
                     actualMethod = new StringBuilder();

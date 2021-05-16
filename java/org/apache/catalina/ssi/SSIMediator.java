@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TimeZone;
@@ -126,7 +127,13 @@ public class SSIMediator {
         variableNames.add("LAST_MODIFIED");
         ssiExternalResolver.addVariableNames(variableNames);
         //Remove any variables that are reserved by this class
-        variableNames.removeIf(this::isNameReserved);
+        Iterator<String> iter = variableNames.iterator();
+        while (iter.hasNext()) {
+            String name = iter.next();
+            if (isNameReserved(name)) {
+                iter.remove();
+            }
+        }
         return variableNames;
     }
 
